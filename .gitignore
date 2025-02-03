@@ -1,1 +1,3 @@
-surrogateAI/raw_data
+surrogateAI/data
+datasets/*_data
+*.ipynb
