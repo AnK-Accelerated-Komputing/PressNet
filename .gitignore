@@ -1,3 +1,6 @@
 surrogateAI/data
 datasets/*_data
 *.ipynb
+surrogateAI/models/__pycache__
+surrogateAI/utilities/__pycache__
+surrogateAI/training_output/*
