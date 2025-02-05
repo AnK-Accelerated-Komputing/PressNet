@@ -6,10 +6,9 @@ import os
 import numpy as np
 
 class TrajectoryDataset(Dataset):
-    def __init__(self, data_path, split='train', transform=None, stage=None):
+    def __init__(self, data_path, split='train', stage=None):
         self.data_path = data_path
         self.split = split
-        self.transform = transform
         self.stage = stage
         self.is_processed = self._is_processed()
 
@@ -27,7 +26,10 @@ class TrajectoryDataset(Dataset):
         return os.path.exists(self.data_path.replace('.h5', f'_{self.split}_{self.stage}.pt'))
 
     def process_data(self):
-        with open('meta.json', 'r') as f:
+        print("processing data...")
+        base_folder = os.path.dirname(self.data_path)
+        meta_file = os.path.join(base_folder, 'meta.json')
+        with open(meta_file, 'r') as f:
             meta_data = json.load(f)
 
         final_data = []
@@ -41,13 +43,19 @@ class TrajectoryDataset(Dataset):
                 selected_groups = group_names[:group_limit]
             elif self.split == 'val':
                 group_limit_start = round(total_groups * 0.7)
-                group_limit_end = round(total_groups * 0.85)
-                selected_groups = group_names[group_limit_start:group_limit_end]
+                group_limit_end = round(total_groups * 0.9)
+                if group_limit_end == group_limit_start:
+                    selected_groups = group_names[group_limit_start:]
+                else:
+                    selected_groups = group_names[group_limit_start:group_limit_end]
             else:  # test
-                group_limit_start = round(total_groups * 0.85)
+                group_limit_start = round(total_groups * 0.9)
+                if group_limit_start == total_groups:
+                    group_limit_start -= 1
                 selected_groups = group_names[group_limit_start:]
-
+            print(f"selected groups: {selected_groups}")
             for group_name in selected_groups:
+                print(f"processing {group_name}")
                 group = h5_file[group_name]
                 meta_info = meta_data[group_name]
 
@@ -100,26 +108,33 @@ class TrajectoryDataset(Dataset):
                             }
                             final_data.append(step_data)
                 else:
-                    # For val/test, group the data as tensors
-                    grouped_data = {
-                        'cells': cells.repeat(step_limit, 1, 1),  # (steps, num_cells, 3)
-                        'mesh_pos': mesh_pos.repeat(step_limit, 1, 1),  # (steps, num_nodes, 3)
-                        'node_type': node_type.repeat(step_limit, 1),  # (steps, num_nodes)
-                        'curr_pos': torch.zeros((step_limit, num_nodes, 3)),
-                        'next_pos': torch.zeros((step_limit, num_nodes, 3))
-                    }
+                    # For val/test, accumulate the data in lists
+                    curr_pos_list = []
+                    next_pos_list = []
 
-                    for idx, step_num in enumerate(range(start_step, end_step + 1)):
+                    for step_num in range(start_step, end_step + 1):
                         step_key = f'step_{step_num}'
                         next_step_key = f'step_{step_num + 1}'
 
                         if step_key in group:
                             step_group = group[step_key]
-                            grouped_data['curr_pos'][idx] = torch.tensor(step_group['world_pos'][:])
+                            curr_pos_list.append(torch.tensor(step_group['world_pos'][:]))
 
                         if next_step_key in group:
                             next_step_group = group[next_step_key]
-                            grouped_data['next_pos'][idx] = torch.tensor(next_step_group['world_pos'][:])
+                            next_pos_list.append(torch.tensor(next_step_group['world_pos'][:]))
+
+                    # Convert lists to tensors
+                    curr_pos_tensor = torch.stack(curr_pos_list) if curr_pos_list else torch.empty(0)
+                    next_pos_tensor = torch.stack(next_pos_list) if next_pos_list else torch.empty(0)
+
+                    grouped_data = {
+                        'cells': cells.expand(curr_pos_tensor.size(0), -1, -1),  # (steps, num_cells, 3)
+                        'mesh_pos': mesh_pos.expand(curr_pos_tensor.size(0), -1, -1),  # (steps, num_nodes, 3)
+                        'node_type': node_type.expand(curr_pos_tensor.size(0),-1, -1),  # (steps, num_nodes,1)
+                        'curr_pos': curr_pos_tensor,
+                        'next_pos': next_pos_tensor
+                    }
 
                     final_data.append(grouped_data)
 
@@ -129,3 +144,23 @@ class TrajectoryDataset(Dataset):
 
     def load_data(self):
         return torch.load(self.data_path.replace('.h5', f'_{self.split}_{self.stage}.pt'))
+
+
+def main():
+    data_file = "/home/gd_user1/AnK/project_PINN/PressNet/surrogateAI/data/press_dataset.h5"
+    dataset = TrajectoryDataset(data_file, split='train', stage=1)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True)
+    i=0
+    for data in dataloader:
+        i+=1
+        # print(i,data.keys())
+        if i ==1:
+            for keys in data.keys():
+                print(keys,data[keys].shape)
+    
+
+    return
+
+
+if __name__ == '__main__':
+    main()
