@@ -25,6 +25,7 @@ class NodeType(enum.IntEnum):
     NORMAL = 0
     OBSTACLE = 1
     HANDLE = 3
+    SIZE = 5
 
 
 def triangles_to_edges(faces, deform=False):
