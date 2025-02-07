@@ -2,6 +2,7 @@ import csv
 import os
 import numpy as np
 import torch
+import re
 
 def read_dat_file(dat_file_path):
     # Flags to track node section
@@ -12,10 +13,16 @@ def read_dat_file(dat_file_path):
     nodes = []
     cells_detail =[]
     # Read the .dat file
+    deltim_pattern = r'deltim,\s*([0-9e\-\.]+)'
+
     with open(dat_file_path, "r") as file:
         lines = file.readlines()
 
     for line in lines:
+        match = re.search(deltim_pattern, line)
+        if match:
+            time_step = float(match.group(1))  # Convert to float
+                    
         line = line.strip()
 
         # Detect the start of the node block
@@ -80,7 +87,7 @@ def read_dat_file(dat_file_path):
     # print(cells)
     cells_detail = [list(item) for item in dict.fromkeys(tuple(cell) for cell in cells_detail)]
     cells = [[cell[2],cell[3],cell[4],cell[6]] for cell in cells_detail]
-    return nodes,cells_detail,cells
+    return nodes,cells_detail,cells,time_step
 
 def assign_body_id_to_nodes(nodes, elements):
     # Create a dictionary to store the body_id for each node
@@ -103,15 +110,15 @@ def assign_body_id_to_nodes(nodes, elements):
     # Convert the dictionary back to a list of nodes with their body_ids
     node_type = list(node_body_mapping.values())
     node_type.sort(key=lambda x: x[0])
-    # Assign body ID 4 based on coordinate conditions
-    for node in node_type:
-        # Find the corresponding node in the original 'nodes' list
-        for original_node in nodes:
-            if node[0] == original_node[0] and node[1] == 1:  # Match node ID
-                x, y = original_node[1], original_node[2]  # Extract x and y coordinates
-                if  100 > x >= -100 and y == 0:
-                    node[1] = 4  # Assign body ID to 4
-                break
+    # # Assign body ID 4 based on coordinate conditions
+    # for node in node_type:
+    #     # Find the corresponding node in the original 'nodes' list
+    #     for original_node in nodes:
+    #         if node[0] == original_node[0] and node[1] == 1:  # Match node ID
+    #             x, y = original_node[1], original_node[2]  # Extract x and y coordinates
+    #             if  100 > x >= -100 and y == 0:
+    #                 node[1] = 4  # Assign body ID to 4
+    #             break
     # print(node_type)
     # print(len(node_type))
     node_type_bid = [node[1] for node in node_type] 
