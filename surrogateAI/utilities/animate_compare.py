@@ -319,8 +319,9 @@ def animate_rollout(data_path, save_directory,i=0,key="stress"):
 
 
 def main():
-    data_path =  '/home/user/PressNet/surrogateAI/training_output/gcn/Wed-Feb-26-10-51-57-2025/rollout/rollout_epoch_1999.pkl'
-    save_directory = '/home/user/PressNet/surrogateAI/results/GCN/2000ep'
+    data_path =  '/home/user/PressNet/surrogateAI/training_output/regpointnet_seg/Thu-Feb-27-13-14-14-2025/rollout/rollout_epoch_500.pkl'
+    save_directory = '/home/user/PressNet/surrogateAI/results/regpointnet/500ep'
+    os.makedirs(save_directory,exist_ok=True)
     animate_rollout(data_path, save_directory)
 
     return
