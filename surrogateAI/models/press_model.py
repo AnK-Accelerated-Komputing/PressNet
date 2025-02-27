@@ -6,7 +6,7 @@ from torch import nn as nn
 # from torch import  as F
 
 from utilities import common
-from models import normalization, encode_process_decode, gcn, regDGCNN_seg
+from models import normalization, encode_process_decode, gcn, regDGCNN_seg, regpointnet_seg
 
 import torch_scatter
 from torch_geometric.data import Data
@@ -64,6 +64,13 @@ class Model(nn.Module):
                 k=20,  
                 emb_dims=1024,  
                 dropout=0.1
+            )
+        elif core_model_name == "regpointnet_seg":
+            self.core_model = regpointnet_seg
+            self.is_multigraph = False
+            self.learned_model = regpointnet_seg.regpointnet_seg(
+                output_size=params['size'],
+                input_channel=12
             )
         else:
             raise ValueError(f"Unsupported core model: {self.core_model_name}")
@@ -189,7 +196,7 @@ class Model(nn.Module):
 
 
     def forward(self, inputs, is_training):
-        if self.core_model_name == "regDGCNN_seg":
+        if self.core_model_name == "regDGCNN_seg" or self.core_model_name == "regpointnet_seg":
             if is_training:
                 return self.learned_model(inputs) 
             else: 
