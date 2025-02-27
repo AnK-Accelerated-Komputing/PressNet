@@ -10,11 +10,10 @@ import numpy as np
 
 # from model import DGCNN, MagNet
 from utilities import press_eval, common
-from utilities.trajectory_solid185_quarter import generate_trajectory
-from utilities.evalutation_trajectory import generate_evaluation_trajectory
 from utilities.dataset import TrajectoryDataset
 
-from models import press_model_MGN
+# from surrogateAI.models import press_model
+from models import press_model
 
 
 device = torch.device('cuda')
@@ -54,17 +53,41 @@ def loss_fn(inputs, network_output, model):
     loss = torch.mean(error[loss_mask])
     return  loss
 
+def prepare_files_and_directories(output_dir,model_num):
+    '''
+        The following code is about creating all the necessary files and directories for the run
+    '''
+    output_dir = os.path.join(output_dir,str(model_num))
+    run_create_time = time.time()
+    run_create_datetime = datetime.datetime.fromtimestamp(run_create_time).strftime('%c')
+    run_create_datetime_datetime_dash = run_create_datetime.replace(" ", "-").replace(":", "-")
+    run_dir = os.path.join(output_dir, run_create_datetime_datetime_dash)
+    Path(run_dir).mkdir(parents=True, exist_ok=True)
+
+    # make all the necessary directories
+    checkpoint_dir = os.path.join(run_dir, 'checkpoint')
+    log_dir = os.path.join(run_dir, 'log')
+    rollout_dir = os.path.join(run_dir, 'rollout')
+    Path(checkpoint_dir).mkdir(parents=True, exist_ok=True)
+    Path(log_dir).mkdir(parents=True, exist_ok=True)
+    Path(rollout_dir).mkdir(parents=True, exist_ok=True)
+
+    return checkpoint_dir, log_dir, rollout_dir
+
+def squeeze_data(data):
+    transformed_data = {key: value.squeeze(0) for key, value in data.items()}
+    return transformed_data
+
+
 def main():
     device = torch.device('cuda')
 
     start_epoch = 0
     start_time = time.time()
-    end_epoch = 1
+    end_epoch = 2000
     print(f"starting training from epoch {start_epoch} to {end_epoch}")
-    train_data_path = "/home/gd_user1/AnK/project_PINN/PressNet/surrogateAI/data/press_dataset.h5"
-    checkpoint_dir = "/home/gd_user1/AnK/project_PINN/PressNet/surrogateAI/training_output/checkpoints"
-    log_dir = "/home/gd_user1/AnK/project_PINN/PressNet/surrogateAI/training_output/log"
-    rollout_dir = "/home/gd_user1/AnK/project_PINN/PressNet/surrogateAI/training_output/rollout"
+    train_data_path = "data/press_dataset.h5"
+    output_dir = "training_output"
     train_dataset = TrajectoryDataset(train_data_path, split='train', stage=1)
     val_dataset = TrajectoryDataset(train_data_path, split='val', stage=1)
     # print(len(train_dataset),len(train_dataset)*3/399)
@@ -77,13 +100,24 @@ def main():
 
 
     ####_____________NEED TO SELECT AMONG DIFFERENT MODELS IN FUTURE_____________##########
-    MGN = True
-    if MGN:
-        params = dict(field='world_pos', size=3, model=press_model_MGN, evaluator=press_eval)
-        model = press_model_MGN.Model(params)
+    # model_num = 1
+    # '''
+    # if model 0: MGN
+    # if model 1: GCN
+    # '''
+    # if model_num == 0:
+    #     params = dict(field='world_pos', size=3, model=press_model, evaluator=press_eval)
+    #     model = press_model.Model(params)
+    # elif model_num == 1:
+    #     model = press_model_GCN.GCN(nfeat=9,nhid=64,output=3,dropout=0.2,edge_dim=4)
+
+    params = dict(field='world_pos', size=3, model=press_model, evaluator=press_eval)
+    core_model = 'regDGCNN_seg'
+    model = press_model.Model(params,core_model_name=core_model)
     model = model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, 0.1 + 1e-6, last_epoch=-1)
+    checkpoint_dir, log_dir, rollout_dir = prepare_files_and_directories(output_dir,core_model)
     
     epoch_training_losses = []
     step_training_losses = []
@@ -95,7 +129,7 @@ def main():
 
         epoch_training_loss = 0.0
 
-        print("starting training")
+        print(" training")
         for data in train_dataloader:
             frame = squeeze_data_frame(data)
             output = model(frame,is_training=True)
@@ -122,6 +156,9 @@ def main():
         temp_train_loss_pkl_file = os.path.join(log_dir, 'temp_train_loss.pkl')
         Path(temp_train_loss_pkl_file).touch()
         pickle_save(temp_train_loss_pkl_file, loss_record)
+        if epoch%250 == 0:
+            pickle_save(temp_train_loss_pkl_file.replace(".pkl",f'_{epoch}.pkl'), loss_record)
+
 
 
         model.save_model(os.path.join(checkpoint_dir,"epoch_model_checkpoint"))
@@ -133,7 +170,7 @@ def main():
             scheduler.step()
 
 
-        if epoch%10 == 0 or epoch == 0 or epoch == end_epoch-1:
+        if epoch%50 == 0 or epoch == 0 or epoch == end_epoch-1:
             trajectories = []
 
             mse_losses = []
@@ -142,9 +179,15 @@ def main():
 
             mse_loss_fn = torch.nn.MSELoss()
             l1_loss_fn = torch.nn.L1Loss()
-            print("starting evaluation")
+            print(" evaluation")
             for data in val_loader:
                 ##
+                # print(data)
+                data=squeeze_data(data)
+                # print(len(data))
+                # print(data['next_pos'].shape)
+                # print(data['mesh_pos'].shape)
+                # print(data['node_type'].shape)
                 _, prediction_trajectory = press_eval.evaluate(model, data)
                 mse_loss = mse_loss_fn(torch.squeeze(data['next_pos'].to(device), dim=0), prediction_trajectory['pred_pos'])
                 l1_loss = l1_loss_fn(torch.squeeze(data['next_pos'].to(device), dim=0), prediction_trajectory['pred_pos'])

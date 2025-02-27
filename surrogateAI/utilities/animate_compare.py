@@ -10,9 +10,11 @@ import numpy as np
 import pickle
 
 def save_rollout_frames(rollout_data,save_directory,i=0,key="stress"):
-    skip = 5
+    skip = 4
     num_steps = rollout_data[i]['gt_pos'].shape[0]
+    print("num_steps",num_steps)
     num_frames = 1 * num_steps // skip
+    print("num_frames",num_frames)
 
     print(f"Number of frames: {num_frames}")
 
@@ -32,40 +34,43 @@ def save_rollout_frames(rollout_data,save_directory,i=0,key="stress"):
         [int(w) for w in k])
 
     m=0
-    # gt_y_displacement_all = abs((single_trajectory['gt_pos']-single_trajectory['mesh_pos']).to('cpu'))
+    gt_y_displacement_all = abs((single_trajectory['gt_pos']-single_trajectory['mesh_pos']).to('cpu'))
     # # print(gt_y_displacement_all.shape)
 
-    # displacement_min = torch.squeeze(gt_y_displacement_all, dim=0).cpu().numpy().min(axis=(0, 1))
-    # displacement_max =torch.squeeze(gt_y_displacement_all, dim=0).cpu().numpy().max(axis=(0, 1))
+    displacement_min = torch.squeeze(gt_y_displacement_all, dim=0).cpu().numpy().min(axis=(0, 1))
+    displacement_max =torch.squeeze(gt_y_displacement_all, dim=0).cpu().numpy().max(axis=(0, 1))
 
 
-    displacement_min = torch.squeeze(single_trajectory['stress'], dim=0).cpu().numpy().min(axis=(0, 1))
-    displacement_max =torch.squeeze(single_trajectory['stress'], dim=0).cpu().numpy().max(axis=(0, 1))
+    # displacement_min = torch.squeeze(single_trajectory['stress'], dim=0).cpu().numpy().min(axis=(0, 1))
+    # displacement_max =torch.squeeze(single_trajectory['stress'], dim=0).cpu().numpy().max(axis=(0, 1))
     print("minimum displacement in x,y,z dirn", displacement_min)
     print("maximum displacement in x,y,z dirn", displacement_max)
     # print(displacement_max, displacement_min)
-    gt_y_displacement_min = displacement_min[0]
-    gt_y_displacement_max = displacement_max[0]
+    gt_y_displacement_min = displacement_min[1]
+    gt_y_displacement_max = displacement_max[1]
     for m in range(num_frames):
         p = m*skip
-        pred_y_displacement = abs((single_trajectory['pred_pos'][p]-single_trajectory['mesh_pos'][p])[:,1].to('cpu'))
-        #pred_displacement = (torch.squeeze(single_trajectory['pred_pos'], dim=0)[p]-torch.squeeze(single_trajectory['mesh_pos'][p])).to('cpu')
-        #pred_x_displecement, pred_y_displacement, pred_z_displacement= pred_displacement[:, 0].numpy(), pred_displacement[:, 1].numpy(), pred_displacement[:, 2].numpy()
-        # gt_y_displacement = abs((single_trajectory['gt_pos'][p]-single_trajectory['mesh_pos'][p])[:,1].to('cpu'))
+        # pred_y_displacement = abs((single_trajectory['pred_pos'][p].to('cpu')-single_trajectory['mesh_pos'][p])[:,1].to('cpu'))
+        pred_displacement = (torch.squeeze(single_trajectory['pred_pos'], dim=0)[p].to('cpu')-torch.squeeze(single_trajectory['mesh_pos'][p].to('cpu'))).to('cpu')
+        pred_x_displecement, pred_y_displacement, pred_z_displacement= pred_displacement[:, 0].numpy(), pred_displacement[:, 1].numpy(), pred_displacement[:, 2].numpy()
+        gt_y_displacement = abs((single_trajectory['gt_pos'][p]-single_trajectory['mesh_pos'][p])[:,1].to('cpu'))
+        pred_y_displacement = abs((single_trajectory['pred_pos'][p].to('cpu')-single_trajectory['mesh_pos'][p].to('cpu'))[:,1].to('cpu'))
 
         node_type = single_trajectory['node_type'][p].to('cpu').flatten()
         mask = (node_type != 1) | (node_type != 3)
         mask_2 = (node_type == 1) | (node_type == 3)
 
-        pred_y_displacement = torch.clamp(pred_y_displacement, min=gt_y_displacement_min, max=gt_y_displacement_max)
+        # pred_y_displacement = torch.clamp(pred_y_displacement, min=gt_y_displacement_min, max=gt_y_displacement_max)
         # print('shape of pred_y_displacement',pred_y_displacement.shape)
         # print(pred_y_displacement)
         # gt_y_displacement = torch.clamp(gt_y_displacement, min=gt_y_displacement_min, max=gt_y_displacement_max)
 
-        pred_stress  = single_trajectory['stress'][p].to('cpu').flatten()
+        pred_stress = pred_y_displacement.flatten()
+        # pred_stress  = single_trajectory['stress'][p].to('cpu').flatten()
         # pred_stress = pred_stress.squeeze(dim=1)
 
-        gt_stress  = single_trajectory['gt_stress'][p].to('cpu').flatten()
+        gt_stress = gt_y_displacement.flatten()
+        # gt_stress  = single_trajectory['gt_stress'][p].to('cpu').flatten()
         # print('shape of pred_stress',pred_stress.shape)
         # print(pred_stress)
         # node_type = single_trajectory['node_type'][p].to('cpu').flatten()
@@ -263,7 +268,7 @@ def save_rollout_frames(rollout_data,save_directory,i=0,key="stress"):
                 cmax=float(gt_y_displacement_max),  # Global max
                 colorscale="jet",  # Or any preferred colorscale
                 colorbar = dict(
-                    title="Stress"
+                    title="y_disp"
                 )
             ) # Ensure color range consistency
         )
@@ -307,14 +312,15 @@ def generate_gif(save_directory,fps=5,loop=0):
 def animate_rollout(data_path, save_directory,i=0,key="stress"):
     with open(data_path, 'rb') as fp:
         rollout_data = pickle.load(fp)
+    print(len(rollout_data))
     print(save_rollout_frames(rollout_data,save_directory,i=i,key=key))
     print(generate_gif(save_directory,fps=8))
     return 
 
 
 def main():
-    data_path =  '/home/gd_user1/AnK/project_PINN/AnK_MeshGraphNets/output/press_3d/Fri-Jan-17-03-42-04-2025/1/rollout/rollout.pkl'
-    save_directory = '/home/gd_user1/AnK/project_PINN/AnK_MeshGraphNets/test_results/combined_without_stress_input/inbetween/stage_3/0'
+    data_path =  '/home/user/PressNet/surrogateAI/training_output/gcn/Wed-Feb-26-10-51-57-2025/rollout/rollout_epoch_1999.pkl'
+    save_directory = '/home/user/PressNet/surrogateAI/results/GCN/2000ep'
     animate_rollout(data_path, save_directory)
 
     return
