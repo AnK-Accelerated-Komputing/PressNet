@@ -31,10 +31,10 @@ def download_file(drive_link, output_folder):
 
 def main():
     drive_links = [
-        'https://drive.google.com/file/d/1IIlnovcj4Efs6Qkz3k040Qfty8Im_hZn/view?usp=sharing',  
-        'https://drive.google.com/file/d/1IIlnovcj4Efs6Qkz3k040Qfty8Im_hZn/view?usp=sharing'
+        'https://drive.google.com/file/d/1q-jIcjpqsBeurIl-MN1EvOQBM6uEFoqs/view?usp=sharing',  
+        'https://drive.google.com/file/d/1RuUy03JvPs02GuVFLiZApmD_uiZB1Kwr/view?usp=sharing'
     ]
-    output_folder = 'datasets/extracted_data'
+    output_folder = '/home/user/PressNet/surrogateAI/data'
     
     for link in drive_links:
         download_file(link, output_folder)
