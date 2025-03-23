@@ -2,7 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import os
 
-train_pkl_path = '/home/user/PressNet/surrogateAI/training_output/regpointnet_seg/Thu-Feb-27-13-14-14-2025/log/temp_train_loss_500.pkl'
+train_pkl_path = '/home/user/PressNet/surrogateAI/training_output/regDGCNN_seg/Channel_rect_press_dataset/Tue-Mar-18-13-42-20-2025/log/temp_train_loss_500.pkl'
 train_df = pd.read_pickle(train_pkl_path)
 train_epoch_losses = [loss.item() for loss in train_df['train_epoch_losses']]
 # Plotting

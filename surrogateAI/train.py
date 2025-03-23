@@ -53,11 +53,12 @@ def loss_fn(inputs, network_output, model):
     loss = torch.mean(error[loss_mask])
     return  loss
 
-def prepare_files_and_directories(output_dir,model_num):
+def prepare_files_and_directories(output_dir,model_num,train_data_path):
     '''
         The following code is about creating all the necessary files and directories for the run
     '''
-    output_dir = os.path.join(output_dir,str(model_num))
+    train_data = train_data_path.split("/")[-1].split(".")[0]
+    output_dir = os.path.join(output_dir,str(model_num),train_data)
     run_create_time = time.time()
     run_create_datetime = datetime.datetime.fromtimestamp(run_create_time).strftime('%c')
     run_create_datetime_datetime_dash = run_create_datetime.replace(" ", "-").replace(":", "-")
@@ -84,9 +85,9 @@ def main():
 
     start_epoch = 0
     start_time = time.time()
-    end_epoch = 2000
+    end_epoch = 1
     print(f"starting training from epoch {start_epoch} to {end_epoch}")
-    train_data_path = "data/press_dataset.h5"
+    train_data_path = "data/merged_400_trimmed_press_dataset.h5"
     output_dir = "training_output"
     train_dataset = TrajectoryDataset(train_data_path, split='train', stage=1)
     val_dataset = TrajectoryDataset(train_data_path, split='val', stage=1)
@@ -94,6 +95,7 @@ def main():
     # print(train_dataset[0])
     # print(len(val_dataset),len(val_dataset)*3/399)
     # print(val_dataset[0])
+
     train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=1, shuffle=True)
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=1, shuffle=True)
 
@@ -112,12 +114,12 @@ def main():
     #     model = press_model_GCN.GCN(nfeat=9,nhid=64,output=3,dropout=0.2,edge_dim=4)
 
     params = dict(field='world_pos', size=3, model=press_model, evaluator=press_eval)
-    core_model = 'regpointnet_seg'
+    core_model = 'regDGCNN_seg'
     model = press_model.Model(params,core_model_name=core_model)
     model = model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, 0.1 + 1e-6, last_epoch=-1)
-    checkpoint_dir, log_dir, rollout_dir = prepare_files_and_directories(output_dir,core_model)
+    checkpoint_dir, log_dir, rollout_dir = prepare_files_and_directories(output_dir,core_model,train_data_path)
     
     epoch_training_losses = []
     step_training_losses = []

@@ -28,7 +28,8 @@ class TrajectoryDataset(Dataset):
     def process_data(self):
         print("processing data...")
         base_folder = os.path.dirname(self.data_path)
-        meta_file = os.path.join(base_folder, 'meta.json')
+        data_name = self.data_path.split('/')[-1].split('.')[0].replace('_press_dataset','')
+        meta_file = os.path.join(base_folder, f'{data_name}_meta.json')
         with open(meta_file, 'r') as f:
             meta_data = json.load(f)
 
@@ -59,7 +60,7 @@ class TrajectoryDataset(Dataset):
                 group = h5_file[group_name]
                 meta_info = meta_data[group_name]
 
-                total_steps = meta_info['steps']
+                total_steps = meta_info['number of steps']
                 num_nodes = meta_info['number of nodes']
                 num_cells = meta_info['number of cells']
 
