@@ -6,8 +6,8 @@ This repo contains/will contain PressNet data and required tools/scripts to use 
 - [x] demo 400 steps structural simulations with coarse mesh
 - [x] demo 1500 steps structural simulation with coarse mesh
 - [ ] demo 1500 steps structural simulation with medium mesh
-- [ ] demo 1500 steps structural simulation with fine mesh
-- [ ] surrogateAI
+- [x] demo 1500 steps structural simulation with fine mesh
+- [x] surrogateAI
 - [ ] tutorial generating raw data
 
 
