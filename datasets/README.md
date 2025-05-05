@@ -6,7 +6,7 @@ For convience, we suggest directly using the data stored in .h5 file, while one 
 
 
 ## .h5 data file
-This is the compressed binary file containing the information of all 150 trajectories in dictionary forma. So, there are 150 key-value pairs of keys "group_0", "group_1" ..... "group_149" and each value being of following format:
+This is the compressed binary file containing the information of all 150 trajectories in dictionary format. So, there are 150 key-value pairs of keys "group_0", "group_1",..., "group_149", and each value is of the following format:
 ```json
 "group_0": {
         "cells": {
@@ -55,20 +55,20 @@ This is the compressed binary file containing the information of all 150 traject
 }
 ```
 ### Description
-- Each ```trajectory/group``` represent a single structural simulation. 
-- ```mesh_pos``` represents the x, y and, z coordinate values of the mesh nodes at initial position or in the meshing
-- ```node_type``` represents one of the three types of node: normal, handle or, obstacle
-  - Normal node types are node lying in the deforming plate and undergoes deformation.
-  - Handle node types are node lying in the deforming plate but in contact with the lower die in the initial state such that the vertical deformation is zero at the given point.
-  - Obstacle node types are node lying in the upper die and lowe die body.
+- Each ```trajectory/group```represents a single structural simulation. 
+- ```mesh_pos``` represents the x, y, and z coordinate values of the mesh nodes at the initial position or in the meshing
+- ```node_type``` represents one of the three types of node: normal, handle, or obstacle
+  - Normal node types are nodes lying in the deforming plate and undergoing deformation.
+  - Handle node types are nodes lying in the deforming plate but in contact with the lower die in the initial state, such that the vertical deformation is zero at the given point.
+  - Obstacle node types are nodes lying in the upper die and lower die body.
 - ```cells``` represent the list of mesh elements (tetrahedral in our case). Each row of cell contains list of four node which compose the given cell. The nodes are represented based on their serial number.
 - ```step_n```: The number of steps range from 1 to 1500 (or 1 to 400 in case of demo data) representing each step of the demo data.
-  - Each step contain values of current node position and stress value
-  - ```curr_pos``` corresponds the x, y and, z values of each node respectively at the given time step.
-  - ```stress``` corresponds the von-misses-stress at each node respectively at the given time step.
+  - Each step contains values of the current node position and stress value
+  - ```curr_pos``` corresponds to the x, y, and z values of each node, respectively, at the given time step.
+  - ```stress``` corresponds to the von Mises stress at each node, respectively, at the given time step.
 
 ## Meta JSON file
-This file contains the information regarding the each corresponding trajectory/group in the .h5 file. The information includes:
+This file contains the information regarding each corresponding trajectory/group in the .h5 file. The information includes:
 - Die Shape
 - Simulation Name
 - Number of Nodes
@@ -81,11 +81,11 @@ This file contains the information regarding the each corresponding trajectory/g
 
 
 ## Raw Files
-There are 15 folders for each die shapes and each of such folder contains 10 different folders with simulation varying in geometric parameters of the given die shape. Such individual simulation folder contains two types of file, .dat file and .txt files
+There are 15 folders for each die shape, and each of such folders contains 10 different folders with simulations varying in geometric parameters of the given die shape. Such an individual simulation folder contains two types of files, .dat files and .txt files
 
-- .dat files is the ANSYS simulation input file and contain information regarding Mesh nodes, bodies, cells and contact bodies
+- .dat files are the ANSYS simulation input file and contain information regarding Mesh nodes, bodies, cells, and contact bodies
 
-- There are four folders with .txt files for x_deformation, y_deformation, z_deformation and stress for each step where each file contain the correspoding nodal values for all the nodes in the given simulation
+- There are four folders with .txt files for x_deformation, y_deformation, z_deformation, and stress for each step, where each file contains the corresponding nodal values for all the nodes in the given simulation
 
 ```
 15x10_400steps_coarse_data/
