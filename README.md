@@ -18,19 +18,13 @@ The dataset compromises of structural deformation simulation with deformation an
 *Figure: Front view of various die shapes used for the simulation*
 
 ## Example Inference 
-For proof of concept we have trained for the die shapes using graph network architecture and obtained the following inference. [//](For this particular case we have also generated thermal data and taught the model to learn that as well.)
+For proof of concept we have trained for the die shapes using graph network architecture and obtained the following inference.\
 
-![Deformation Inference Result](docs/images/rollout_0_r25_ml16_del400_fps15.gif)
+![Deformation Inference Result 1](docs/images/rollout_0_r25_ml16_del400_fps15.gif)
 *Figure: Inference result of the simulation with deformation seen visually and vertical deformation as contour plot*
 
 
-![Deformation Inference Result](docs/images/rollout_0_r25_ml16_del400_fps15.gif)
+![Deformation Inference Result 2](docs/images/rollout_1_r25_ml16_del400_fps15.gif)
 *Figure: Inference result of the simulation with deformation seen visually and vertical deformation as contour plot*
-[//](
-## More works beyond PressNet paper 
-![Stress Inference Result](docs/images/10x1_1500steps.gif)
-*Figure: Inference result of the simulation with deformation seen visually and stress as contour plot*
 
-![Temperature Inference Result](docs/images/10x2_thermal_with_deformation.gif)
-*Figure: Inference result of the simulation with deformation seen visually and temperature as contour plot*
-)
+
