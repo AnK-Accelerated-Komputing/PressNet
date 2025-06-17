@@ -144,7 +144,7 @@ class TrajectoryDataset(Dataset):
         print(f"Data successfully saved to {self.split}_{self.stage}.pt")
 
     def load_data(self):
-        return torch.load(self.data_path.replace('.h5', f'_{self.split}_{self.stage}.pt'))
+        return torch.load(self.data_path.replace('.h5', f'_{self.split}_{self.stage}.pt'), weights_only=True)
 
 
 def main():
