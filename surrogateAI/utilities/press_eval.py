@@ -5,10 +5,10 @@ from utilities import common
 import numpy as np
 import mpl_toolkits.mplot3d as p3d
 
-device = torch.device('cuda')
+# device = torch.device('cuda')
 
 
-def _rollout(model, initial_state, num_steps, target_world_pos):
+def _rollout(model, initial_state, num_steps, device,target_world_pos):
     """Rolls out a model trajectory."""
     node_type = initial_state['node_type'].to(device)
     mask = torch.eq(node_type[:, 0], torch.tensor([common.NodeType.NORMAL.value], device=device))
@@ -39,7 +39,7 @@ def _rollout(model, initial_state, num_steps, target_world_pos):
         cur_pos, trajectory, cur_positions, cur_velocities = step_fn(cur_pos, trajectory, cur_positions, cur_velocities, target_world_pos[step])
     return (torch.stack(trajectory), torch.stack(cur_positions), torch.stack(cur_velocities))
 
-def evaluate(model, trajectory, num_steps=None):
+def evaluate(model, trajectory, device, num_steps=None):
     """Performs model rollouts and create stats."""
     initial_state = {k: torch.squeeze(v, 0)[0] for k, v in trajectory.items()}
     # print("??????INITIAL STATE?????????")
@@ -48,7 +48,7 @@ def evaluate(model, trajectory, num_steps=None):
     # print("meshpos",trajectory['mesh_pos'].shape)
     if num_steps is None:
         num_steps = trajectory['mesh_pos'].squeeze(0).shape[0]
-    prediction, cur_positions, cur_velocities = _rollout(model, initial_state, num_steps, trajectory['next_pos'].squeeze(0).to(device))
+    prediction, cur_positions, cur_velocities = _rollout(model, initial_state, num_steps, device, trajectory['next_pos'].squeeze(0).to(device),)
 
     # error = tf.reduce_mean((prediction - trajectory['world_pos'])**2, axis=-1)
     # scalars = {'mse_%d_steps' % horizon: tf.reduce_mean(error[1:horizon+1])

@@ -31,12 +31,13 @@ EdgeSet = collections.namedtuple('EdgeSet', ['name', 'features', 'senders',
 MultiGraph = collections.namedtuple('Graph', ['node_features', 'edge_sets'])
 MultiGraphWithPos = collections.namedtuple('Graph', ['node_features', 'edge_sets', 'target_feature', 'model_type', 'node_dynamic'])
 
-device = torch.device('cuda')
+# device = torch.device('cuda')
 
 
 class LazyMLP(nn.Module):
-    def __init__(self, output_sizes):
+    def __init__(self, output_sizes,device):
         super().__init__()
+        self.device = device
         num_layers = len(output_sizes)
         self._layers_ordered_dict = OrderedDict()
         for index, output_size in enumerate(output_sizes):
@@ -46,17 +47,19 @@ class LazyMLP(nn.Module):
         self.layers = nn.Sequential(self._layers_ordered_dict)
 
     def forward(self, input):
-        input = input.to(device)
+        input = input.to(self.device)
         y = self.layers(input)
         return y
 
 
 class AttentionModel(nn.Module):
-    def __init__(self):
+    def __init__(self, device):
         super().__init__()
         self.linear_layer = nn.LazyLinear(1)
         self.leaky_relu = nn.LeakyReLU(negative_slope=0.2)
-        self.to(device)
+        self.device = device
+        self.to(self.device)
+        
 
     def forward(self, input, index):
 
@@ -72,14 +75,15 @@ class AttentionModel(nn.Module):
 class GraphNetBlock(nn.Module):
     """Multi-Edge Interaction Network with residual connections."""
 
-    def __init__(self, model_fn, output_size, message_passing_aggregator, attention=False):
+    def __init__(self, model_fn, output_size, message_passing_aggregator, device, attention=False):
         super().__init__()
         self.mesh_edge_model = model_fn(output_size)
         self.world_edge_model = model_fn(output_size)
         self.node_model = model_fn(output_size)
+        self.device = device
         self.attention = attention
         if attention:
-            self.attention_model = AttentionModel()
+            self.attention_model = AttentionModel(self.device)
         self.message_passing_aggregator = message_passing_aggregator
 
         self.linear_layer = nn.LazyLinear(1)
@@ -87,8 +91,8 @@ class GraphNetBlock(nn.Module):
 
     def _update_edge_features(self, node_features, edge_set):
         """Aggregrates node features, and applies edge function."""
-        senders = edge_set.senders.to(device)
-        receivers = edge_set.receivers.to(device)
+        senders = edge_set.senders.to(self.device)
+        receivers = edge_set.receivers.to(self.device)
         sender_features = torch.index_select(input=node_features, dim=0, index=senders)
         receiver_features = torch.index_select(input=node_features, dim=0, index=receivers)
         features = [sender_features, receiver_features, edge_set.features]
@@ -110,16 +114,16 @@ class GraphNetBlock(nn.Module):
         assert all([i in data.shape for i in segment_ids.shape]), "segment_ids.shape should be a prefix of data.shape"
 
         # segment_ids is a 1-D tensor repeat it to have the same shape as data
-        data = data.to(device)
-        segment_ids = segment_ids.to(device)
+        data = data.to(self.device)
+        segment_ids = segment_ids.to(self.device)
         if len(segment_ids.shape) == 1:
-            s = torch.prod(torch.tensor(data.shape[1:])).long().to(device)
-            segment_ids = segment_ids.repeat_interleave(s).view(segment_ids.shape[0], *data.shape[1:]).to(device)
+            s = torch.prod(torch.tensor(data.shape[1:])).long().to(self.device)
+            segment_ids = segment_ids.repeat_interleave(s).view(segment_ids.shape[0], *data.shape[1:]).to(self.device)
 
         assert data.shape == segment_ids.shape, "data.shape and segment_ids.shape should be equal"
 
         shape = [num_segments] + list(data.shape[1:])
-        result = torch.zeros(*shape).to(device)
+        result = torch.zeros(*shape).to(self.device)
         if operation == 'sum':
             result = torch_scatter.scatter_add(data.float(), segment_ids, dim=0, dim_size=num_segments)
         elif operation == 'max':
@@ -253,15 +257,16 @@ class Processor(nn.Module):
     Option: choose whether to normalize the high rank node connection
     '''
 
-    def __init__(self, make_mlp, output_size, message_passing_steps, message_passing_aggregator, attention=False,
+    def __init__(self, make_mlp, output_size, message_passing_steps, message_passing_aggregator,device, attention=False,
                  stochastic_message_passing_used=False):
         super().__init__()
         self.stochastic_message_passing_used = stochastic_message_passing_used
         self.graphnet_blocks = nn.ModuleList()
+        self.device = device
         for index in range(message_passing_steps):
             self.graphnet_blocks.append(GraphNetBlock(model_fn=make_mlp, output_size=output_size,
                                                       message_passing_aggregator=message_passing_aggregator,
-                                                      attention=attention))
+                                                      attention=attention, device=self.device))
 
     def forward(self, latent_graph, normalized_adj_mat=None, mask=None):
         for graphnet_block in self.graphnet_blocks:
@@ -278,13 +283,14 @@ class EncodeProcessDecode(nn.Module):
                  output_size,
                  latent_size,
                  num_layers,
-                 message_passing_aggregator, message_passing_steps, attention):
+                 message_passing_aggregator, message_passing_steps, attention, device):
         super().__init__()
         self._latent_size = latent_size
         self._output_size = output_size
         self._num_layers = num_layers
         self._message_passing_steps = message_passing_steps
         self._message_passing_aggregator = message_passing_aggregator
+        self.device = device
 
         self._attention = attention     
 
@@ -293,14 +299,14 @@ class EncodeProcessDecode(nn.Module):
                                    message_passing_steps=self._message_passing_steps,
                                    message_passing_aggregator=self._message_passing_aggregator,
                                    attention=self._attention,
-                                   stochastic_message_passing_used=False)
+                                   stochastic_message_passing_used=False, device=self.device)
         self.decoder = Decoder(make_mlp=functools.partial(self._make_mlp, layer_norm=False),
                                output_size=self._output_size)
 
     def _make_mlp(self, output_size, layer_norm=True):
         """Builds an MLP."""
         widths = [self._latent_size] * self._num_layers + [output_size]
-        network = LazyMLP(widths)
+        network = LazyMLP(widths, self.device)
         if layer_norm:
             network = nn.Sequential(network, nn.LayerNorm(normalized_shape=widths[-1]))
         return network

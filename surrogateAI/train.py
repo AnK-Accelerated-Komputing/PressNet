@@ -5,8 +5,9 @@ import time
 import datetime
 
 import torch
-from torch.nn.parallel import DistributedDataParallel as DDP
-import numpy as np
+import argparse
+import mlflow
+from dotenv import load_dotenv
 
 # from model import DGCNN, MagNet
 from utilities import press_eval, common
@@ -16,8 +17,25 @@ from utilities.dataset import TrajectoryDataset
 from models import press_model
 
 
-device = torch.device('cuda')
+load_dotenv()
+mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI"))
+os.environ["MLFLOW_ENABLE_SYSTEM_METRICS_LOGGING"] = "true"
 
+parser = argparse.ArgumentParser(description='PressNet Training Script')
+
+parser.add_argument("--output_dir", type=str, help="Directory to save the training output and checkpoints")
+parser.add_argument("--core_model", type=str, default="regDGCNN_seg", help="Core model name to use for training")
+parser.add_argument("--epochs", type=int, default=1000, help="Number of epochs to train the model")
+parser.add_argument("--batch_size", type=int, default=1, help="Batch size for training")
+parser.add_argument("--learning_rate", type=float, default=1e-4, help="Learning rate for the optimizer")
+
+parser.add_argument("--cuda_int", type=int, default=0, help="CUDA device index to use for training")
+parser.add_argument("--train_data_path", type=str, default="/home/ubuntu/ujwal/PressNetTest/PressNet/surrogateAI/data/conical_press_dataset.h5", help="Path to the training data file")
+parser.add_argument("--experiment_name", type=str, default="PressNet_Training", help="Name of the MLflow experiment")
+parser.add_argument("--is_nested", type=bool, default=False, help="Make MLFLOW nested run")
+args = parser.parse_args()
+
+device = torch.device(f'cuda:{args.cuda_int}')
 
 def squeeze_data_frame(data_frame):
     for k, v in data_frame.items():
@@ -81,14 +99,16 @@ def squeeze_data(data):
 
 
 def main():
-    device = torch.device('cuda')
 
+    mlflow.set_experiment(args.experiment_name)
     start_epoch = 0
     start_time = time.time()
-    end_epoch = 1
+    end_epoch = args.epochs
     print(f"starting training from epoch {start_epoch} to {end_epoch}")
-    train_data_path = "data/merged_400_trimmed_press_dataset.h5"
-    output_dir = "training_output"
+    # train_data_path = "data/merged_400_trimmed_press_dataset.h5"
+    train_data_path = args.train_data_path
+    output_dir = args.output_dir
+
     train_dataset = TrajectoryDataset(train_data_path, split='train', stage=1)
     val_dataset = TrajectoryDataset(train_data_path, split='val', stage=1)
     # print(len(train_dataset),len(train_dataset)*3/399)
@@ -114,104 +134,146 @@ def main():
     #     model = press_model_GCN.GCN(nfeat=9,nhid=64,output=3,dropout=0.2,edge_dim=4)
 
     params = dict(field='world_pos', size=3, model=press_model, evaluator=press_eval)
-    core_model = 'regDGCNN_seg'
-    model = press_model.Model(params,core_model_name=core_model)
+    core_model = args.core_model
+    model = press_model.Model(params,core_model_name=core_model, device=device)
     model = model.to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, 0.1 + 1e-6, last_epoch=-1)
     checkpoint_dir, log_dir, rollout_dir = prepare_files_and_directories(output_dir,core_model,train_data_path)
     
     epoch_training_losses = []
     step_training_losses = []
     epoch_run_times = []
+    
+    # Model Params
+    model_params = {
+        "gpus": 1,
+        "GPU_name": torch.cuda.get_device_name(args.cuda_int),
+        "epochs": args.epochs,
+        "batch_size": args.batch_size,
+        "learning_rate": args.learning_rate, 
+        "optimizer_gamma" : 0.1 + 1e-6,
+        "data_path": args.train_data_path,
+        "model_name": args.core_model,
+    }
+    mlflow.log_params(model_params)
+    mlflow.set_tag("model_name", args.core_model)
+    
+    with mlflow.start_run(nested=args.is_nested) as run :
 
-    for epoch in range(start_epoch, end_epoch):
-        print(f"running epoch {epoch+1}")
-        epoch_start_time = time.time()
+        for epoch in range(start_epoch, end_epoch):
+            print(f"running epoch {epoch+1}")
+            epoch_start_time = time.time()
 
-        epoch_training_loss = 0.0
+            epoch_training_loss = 0.0
 
-        print(" training")
-        for data in train_dataloader:
-            frame = squeeze_data_frame(data)
-            output = model(frame,is_training=True)
-            loss = loss_fn(frame, output, model)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            step_training_losses.append(loss.detach().cpu())
+            print(" training")
+            for data in train_dataloader:
+                frame = squeeze_data_frame(data)
+                output = model(frame,is_training=True)
+                loss = loss_fn(frame, output, model)
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                step_training_losses.append(loss.detach().cpu())
 
-            epoch_training_loss += loss.detach().cpu()
+                epoch_training_loss += loss.detach().cpu()
 
-        epoch_training_losses.append(epoch_training_loss)
-        print(f"epoch {epoch+1} training loss: {epoch_training_loss}, time taken: {time.time() - epoch_start_time}")
+            epoch_training_losses.append(epoch_training_loss)
+            print(f"epoch {epoch+1} training loss: {epoch_training_loss}, time taken: {time.time() - epoch_start_time}")
 
-
-        loss_record = {}
-        loss_record['train_total_loss'] = torch.sum(torch.stack(epoch_training_losses))
-        loss_record['train_mean_epoch_loss'] = torch.mean(torch.stack(epoch_training_losses)).item()
-        loss_record['train_max_epoch_loss'] = torch.max(torch.stack(epoch_training_losses)).item()
-        loss_record['train_min_epoch_loss'] = torch.min(torch.stack(epoch_training_losses)).item()
-        loss_record['train_epoch_losses'] = epoch_training_losses
-        loss_record['all_step_train_losses'] = step_training_losses
-        # save train loss
-        temp_train_loss_pkl_file = os.path.join(log_dir, 'temp_train_loss.pkl')
-        Path(temp_train_loss_pkl_file).touch()
-        pickle_save(temp_train_loss_pkl_file, loss_record)
-        if epoch%250 == 0:
-            pickle_save(temp_train_loss_pkl_file.replace(".pkl",f'_{epoch}.pkl'), loss_record)
-
-
-
-        model.save_model(os.path.join(checkpoint_dir,"epoch_model_checkpoint"))
-        torch.save(optimizer.state_dict(),os.path.join(checkpoint_dir,"epoch_optimizer_checkpoint" + ".pth"))
-        torch.save(scheduler.state_dict(),os.path.join(checkpoint_dir,"epoch_scheduler_checkpoint" + ".pth"))
-        torch.save({'epoch': epoch}, os.path.join(checkpoint_dir, "epoch_checkpoint.pth"))
-        
-        if epoch == 13:
-            scheduler.step()
-
-
-        if epoch%50 == 0 or epoch == 0 or epoch == end_epoch-1:
-            trajectories = []
-
-            mse_losses = []
-            l1_losses = []
-            save_file = "rollout_epoch_" + str(epoch) + ".pkl"
-
-            mse_loss_fn = torch.nn.MSELoss()
-            l1_loss_fn = torch.nn.L1Loss()
-            print(" evaluation")
-            for data in val_loader:
-                ##
-                # print(data)
-                data=squeeze_data(data)
-                # print(len(data))
-                # print(data['next_pos'].shape)
-                # print(data['mesh_pos'].shape)
-                # print(data['node_type'].shape)
-                _, prediction_trajectory = press_eval.evaluate(model, data)
-                mse_loss = mse_loss_fn(torch.squeeze(data['next_pos'].to(device), dim=0), prediction_trajectory['pred_pos'])
-                l1_loss = l1_loss_fn(torch.squeeze(data['next_pos'].to(device), dim=0), prediction_trajectory['pred_pos'])
-                mse_losses.append(mse_loss.cpu())
-                l1_losses.append(l1_loss.cpu())
-                trajectories.append(prediction_trajectory)
-
-            pickle_save(os.path.join(rollout_dir, save_file), trajectories)
+            
             loss_record = {}
-            loss_record['eval_total_mse_loss'] = torch.sum(torch.stack(mse_losses)).item()
-            loss_record['eval_total_l1_loss'] = torch.sum(torch.stack(l1_losses)).item()
-            loss_record['eval_mean_mse_loss'] = torch.mean(torch.stack(mse_losses)).item()
-            loss_record['eval_max_mse_loss'] = torch.max(torch.stack(mse_losses)).item()
-            loss_record['eval_min_mse_loss'] = torch.min(torch.stack(mse_losses)).item()
-            loss_record['eval_mean_l1_loss'] = torch.mean(torch.stack(l1_losses)).item()
-            loss_record['eval_max_l1_loss'] = torch.max(torch.stack(l1_losses)).item()
-            loss_record['eval_min_l1_loss'] = torch.min(torch.stack(l1_losses)).item()
-            loss_record['eval_mse_losses'] = mse_losses
-            loss_record['eval_l1_losses'] = l1_losses
-            pickle_save(os.path.join(log_dir, f'eval_loss_epoch_{epoch}.pkl'), loss_record)
+            loss_record['train_total_loss'] = torch.sum(torch.stack(epoch_training_losses))
+            loss_record['train_mean_epoch_loss'] = torch.mean(torch.stack(epoch_training_losses)).item()
+            loss_record['train_max_epoch_loss'] = torch.max(torch.stack(epoch_training_losses)).item()
+            loss_record['train_min_epoch_loss'] = torch.min(torch.stack(epoch_training_losses)).item()
+            loss_record['train_epoch_losses'] = epoch_training_losses
+            loss_record['all_step_train_losses'] = step_training_losses
+            
+            mlflow.log_metrics(
+                {
+                    'epoch': epoch + 1 ,
+                    'train_loss': epoch_training_loss,
+                    'learning_rate': optimizer.param_groups[0]['lr'],
+                    'train_time_taken': time.time() - epoch_start_time,
+                    "train_total_loss": loss_record['train_total_loss'].item(),
+                },
+                step=epoch+1
+            )
+            
+            # save train loss
+            temp_train_loss_pkl_file = os.path.join(log_dir, 'temp_train_loss.pkl')
+            Path(temp_train_loss_pkl_file).touch()
+            pickle_save(temp_train_loss_pkl_file, loss_record)
+            if epoch%250 == 0:
+                pickle_save(temp_train_loss_pkl_file.replace(".pkl",f'_{epoch}.pkl'), loss_record)
 
-        epoch_run_times.append(time.time() - epoch_start_time)
+
+
+            model.save_model(os.path.join(checkpoint_dir,"epoch_model_checkpoint"))
+            torch.save(optimizer.state_dict(),os.path.join(checkpoint_dir,"epoch_optimizer_checkpoint" + ".pth"))
+            torch.save(scheduler.state_dict(),os.path.join(checkpoint_dir,"epoch_scheduler_checkpoint" + ".pth"))
+            torch.save({'epoch': epoch}, os.path.join(checkpoint_dir, "epoch_checkpoint.pth"))
+            
+            if epoch == 13:
+                scheduler.step()
+
+
+            if epoch%50 == 0 or epoch == 0 or epoch == end_epoch-1:
+                trajectories = []
+
+                mse_losses = []
+                l1_losses = []
+                save_file = "rollout_epoch_" + str(epoch) + ".pkl"
+
+                mse_loss_fn = torch.nn.MSELoss()
+                l1_loss_fn = torch.nn.L1Loss()
+                print(" evaluation")
+                for data in val_loader:
+                    ##
+                    # print(data)
+                    data=squeeze_data(data)
+                    # print(len(data))
+                    # print(data['next_pos'].shape)
+                    # print(data['mesh_pos'].shape)
+                    # print(data['node_type'].shape)
+                    _, prediction_trajectory = press_eval.evaluate(model, data, device=device)
+                    mse_loss = mse_loss_fn(torch.squeeze(data['next_pos'].to(device), dim=0), prediction_trajectory['pred_pos'])
+                    l1_loss = l1_loss_fn(torch.squeeze(data['next_pos'].to(device), dim=0), prediction_trajectory['pred_pos'])
+                    mse_losses.append(mse_loss.cpu())
+                    l1_losses.append(l1_loss.cpu())
+                    trajectories.append(prediction_trajectory)
+
+                pickle_save(os.path.join(rollout_dir, save_file), trajectories)
+                loss_record = {}
+                loss_record['eval_total_mse_loss'] = torch.sum(torch.stack(mse_losses)).item()
+                loss_record['eval_total_l1_loss'] = torch.sum(torch.stack(l1_losses)).item()
+                loss_record['eval_mean_mse_loss'] = torch.mean(torch.stack(mse_losses)).item()
+                loss_record['eval_max_mse_loss'] = torch.max(torch.stack(mse_losses)).item()
+                loss_record['eval_min_mse_loss'] = torch.min(torch.stack(mse_losses)).item()
+                loss_record['eval_mean_l1_loss'] = torch.mean(torch.stack(l1_losses)).item()
+                loss_record['eval_max_l1_loss'] = torch.max(torch.stack(l1_losses)).item()
+                loss_record['eval_min_l1_loss'] = torch.min(torch.stack(l1_losses)).item()
+                loss_record['eval_mse_losses'] = mse_losses
+                loss_record['eval_l1_losses'] = l1_losses
+                
+                mlflow.log_metrics(
+                    {
+                        "eval_total_mse_loss": loss_record['eval_total_mse_loss'],
+                        "eval_total_l1_loss": loss_record['eval_total_l1_loss'],
+                        "eval_mean_mse_loss": loss_record['eval_mean_mse_loss'],
+                        "eval_mean_l1_loss": loss_record['eval_mean_l1_loss'],
+                        "eval_max_mse_loss": loss_record['eval_max_mse_loss'],
+                        "eval_max_l1_loss": loss_record['eval_max_l1_loss'],
+                        "eval_min_mse_loss": loss_record['eval_min_mse_loss'],
+                        "eval_min_l1_loss": loss_record['eval_min_l1_loss'],
+                    },
+                    step=epoch + 1
+                )
+                pickle_save(os.path.join(log_dir, f'eval_loss_epoch_{epoch}.pkl'), loss_record)
+
+            epoch_run_times.append(time.time() - epoch_start_time)
 
     pickle_save(os.path.join(log_dir, 'epoch_run_times.pkl'), epoch_run_times)
     model.save_model(os.path.join(checkpoint_dir, "model_checkpoint"))

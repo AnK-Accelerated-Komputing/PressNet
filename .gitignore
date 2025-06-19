@@ -8,3 +8,7 @@ surrogateAI/results
 datasets/utilities/__pycache__
 venv
 training_output/
+mlruns/
+.env
+__pycache__
+*.pyc
