@@ -114,7 +114,7 @@ def main():
     #     model = press_model_GCN.GCN(nfeat=9,nhid=64,output=3,dropout=0.2,edge_dim=4)
 
     params = dict(field='world_pos', size=3, model=press_model, evaluator=press_eval)
-    core_model = 'regDGCNN_seg'
+    core_model = 'transolver'
     model = press_model.Model(params,core_model_name=core_model)
     model = model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
