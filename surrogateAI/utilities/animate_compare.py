@@ -62,8 +62,8 @@ def save_rollout_frames(rollout_data,save_directory,i=0,key="stress"):
         pred_y_displacement = abs((single_trajectory['pred_pos'][p].to('cpu')-single_trajectory['mesh_pos'][p].to('cpu'))[:,1].to('cpu'))
 
         node_type = single_trajectory['node_type'][p].to('cpu').flatten()
-        mask = (node_type != 0) | (node_type != 3)
-        mask_2 = (node_type == 0) | (node_type == 3)
+        mask = (node_type != 1) 
+        mask_2 = (node_type == 1)
 
         # pred_y_displacement = torch.clamp(pred_y_displacement, min=gt_y_displacement_min, max=gt_y_displacement_max)
         # print('shape of pred_y_displacement',pred_y_displacement.shape)
@@ -314,7 +314,7 @@ def generate_gif(save_directory,fps=5,loop=0):
 
     return 'animated gif saved'
       
-def animate_rollout(data_path, save_directory,i=0,key="stress"):
+def animate_rollout(data_path, save_directory,i=1,key="stress"):
     with open(data_path, 'rb') as fp:
         rollout_data = pickle.load(fp)
     print(len(rollout_data))
@@ -324,8 +324,8 @@ def animate_rollout(data_path, save_directory,i=0,key="stress"):
 
 
 def main():
-    data_path =  '/home/user/PressNet/surrogateAI/training_output/regDGCNN_seg/Channel_rect_press_dataset/Tue-Mar-18-13-42-20-2025/rollout/rollout_epoch_350.pkl'
-    save_directory = '/home/user/PressNet/surrogateAI/results/regDGCNN/Channel_rect_press_dataset/400_step'
+    data_path =  '/home/ujwal/NEWPRESSNET/PressNet/datasets/data/rollout/dgcnn_rollout_epoch_500.pkl'
+    save_directory = '/home/ujwal/NEWPRESSNET/PressNet/datasets/data/rollout/rollout_animation'
     os.makedirs(save_directory,exist_ok=True)
     animate_rollout(data_path, save_directory)
 
