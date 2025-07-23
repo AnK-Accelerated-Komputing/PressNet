@@ -6,7 +6,7 @@ from torch import nn as nn
 # from torch import  as F
 
 from utilities import common
-from models import normalization, encode_process_decode, gcn, regDGCNN_seg, regpointnet_seg
+from models import normalization, encode_process_decode, gcn, regDGCNN_seg, regpointnet_seg, transolver
 
 import torch_scatter
 from torch_geometric.data import Data
@@ -71,6 +71,16 @@ class Model(nn.Module):
             self.learned_model = regpointnet_seg.regpointnet_seg(
                 output_size=params['size'],
                 input_channel=12
+            )
+        elif core_model_name == "transolver":
+            self.core_model = transolver
+            self.is_multigraph = False
+            self.learned_model = transolver.Model(n_hidden=256, n_layers=8, space_dim=3,
+				fun_dim=0,
+				n_head=8,
+				mlp_ratio=2, out_dim=3,
+				slice_num=32,
+				unified_pos=0
             )
         else:
             raise ValueError(f"Unsupported core model: {self.core_model_name}")
@@ -196,7 +206,7 @@ class Model(nn.Module):
 
 
     def forward(self, inputs, is_training):
-        if self.core_model_name == "regDGCNN_seg" or self.core_model_name == "regpointnet_seg":
+        if self.core_model_name == "regDGCNN_seg" or self.core_model_name == "regpointnet_seg" or self.core_model_name == "transolver":
             if is_training:
                 return self.learned_model(inputs) 
             else: 
