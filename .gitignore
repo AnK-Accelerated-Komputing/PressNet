@@ -6,3 +6,4 @@ surrogateAI/utilities/__pycache__
 surrogateAI/training_output/*
 surrogateAI/results
 datasets/utilities/__pycache__
+datasets/data
