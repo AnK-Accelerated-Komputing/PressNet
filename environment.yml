@@ -1,0 +1,19 @@
+name: graph_env
+channels:
+  - pytorch
+  - nvidia
+  - pyg
+  - defaults
+dependencies:
+  - python=3.10
+  - pytorch
+  - torchvision
+  - torchaudio
+  - pytorch-cuda=12.1
+  - pytorch-scatter
+  - matplotlib
+  - h5py
+  - pip
+  - pip:
+      - torch-geometric
+      - trimesh
