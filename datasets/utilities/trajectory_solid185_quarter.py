@@ -13,7 +13,7 @@ def generate_trajectory(single_traj_folder_path,device,stage=None):
     z_deform_path = os.path.join(single_traj_folder_path,"Directional_Deformation_Z")
     stres_path = os.path.join(single_traj_folder_path,"Equivalent_Stress")
 
-    nodes,cells_detail,cells =frame.read_dat_file(dat_file_path)
+    nodes,cells_detail,cells,time_steps =frame.read_dat_file(dat_file_path)
     print("cells and nodes extracted")
     # print(cells)
     mesh_pos_list =  [list(node[1:4]) for node in nodes]
@@ -86,7 +86,7 @@ def generate_trajectory(single_traj_folder_path,device,stage=None):
         print(i+1,end='\r')
         continue
 
-    return trajectory
+    return trajectory, time_steps
 
 
 
