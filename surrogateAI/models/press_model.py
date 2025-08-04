@@ -19,7 +19,7 @@ class Model(nn.Module):
     """Model for static cloth simulation."""
 
     def __init__(self, params, core_model_name="encode_process_decode", message_passing_aggregator='sum',
-                 message_passing_steps=15, attention=False):
+                 message_passing_steps=7, attention=False):
         super(Model, self).__init__()
         self._params = params
         self._output_normalizer = normalization.Normalizer(size=3, name='output_normalizer')
@@ -39,10 +39,11 @@ class Model(nn.Module):
             self.is_multigraph = True
             self.learned_model = self.core_model.EncodeProcessDecode(
                 output_size=params['size'],
-                latent_size=128,
+                latent_size=32,
                 num_layers=2,
                 message_passing_steps=self.message_passing_steps,
-                message_passing_aggregator=self.message_passing_aggregator, attention=self._attention
+                message_passing_aggregator=self.message_passing_aggregator, attention=self._attention,
+                dropout_rate = 0.4
             )
 
         elif core_model_name == 'gcn':
