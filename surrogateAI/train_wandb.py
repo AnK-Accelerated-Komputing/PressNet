@@ -135,13 +135,14 @@ def main():
     device = torch.device('cuda')
 
     # Initialize Wandb
-    wandb.init(project="Journal S-Quarter Press", config={
+    wandb.init(project="test", config={
         "learning_rate": 0.001,
         "epochs": 1000,
         "batch_size": 1,
         "model": "encode_process_decode",
         "dataset": "quarter s dataset: 400 step coarse",
-        "message_passing_layer": "7"
+        "message_passing_layer": "7",
+        "dropout": "0.4"
     })
 
     start_epoch = 0
@@ -149,7 +150,7 @@ def main():
     end_epoch = 1000
     print(f"starting training from epoch {start_epoch} to {end_epoch}")
     train_data_path = "//home/ujwal/NEWPRESSNET/PressNet/Local/data/input/quarter_s_press_dataset.h5"
-    output_dir = "/home/ujwal/NEWPRESSNET/PressNet/Local/data/output"
+    output_dir = "/home/ujwal/NEWPRESSNET/PressNet/Local/test/output"
     train_dataset = TrajectoryDataset(train_data_path, split='train', stage=1)
     val_dataset = TrajectoryDataset(train_data_path, split='val', stage=1)
     # print(len(train_dataset),len(train_dataset)*3/399)
@@ -254,7 +255,7 @@ def main():
             scheduler.step()
 
 
-        if epoch%50 == 0 or epoch == 0 or epoch == end_epoch-1:
+        if epoch%2 == 0 or epoch == 0 or epoch == end_epoch-1:
             trajectories = []
 
             mse_losses = []
