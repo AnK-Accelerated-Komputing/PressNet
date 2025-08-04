@@ -269,16 +269,17 @@ def plot_domain_wise_loss(x_ranges,results, output_dir,key='all'):
 
         plt.xlabel('X-dimension ranges', fontsize=14)
         plt.ylabel('L2 Error', fontsize=14)
-        plt.title('Stress Error Across X-dimension Ranges', fontsize=16)
+        # plt.title('Stress Error Across X-dimension Ranges', fontsize=16)
+        plt.title('y-deformation error across x-dimension ranges', fontsize=16)
         plt.xticks(
             x_range_labels, 
             [f"[{x_max}, {x_min}]" for x_min, x_max in results['range']], 
             fontsize=1, 
             rotation=0
         )
-        plt.ylim(0, max_error+0.2)
-        # plt.ylim(-250, 0)
-        plt.xlim(-650, 50) 
+        # plt.ylim(0, max_error+0.1)
+        plt.ylim(0,-150)
+        plt.xlim(-350, 50) 
         plt.grid(axis='y', linestyle='--', alpha=0.7)
 
         # Create a ScalarMappable for the colorbar
@@ -303,6 +304,7 @@ def evaluate_rollout(rollout_pth, base_output_dir,plot=True):
     print(f"Rollout Evaluation for {rollout_pth}")
     rollout = load_pkl_file(rollout_pth)
     average_deformation_error = []
+    max_deformation_error = []
     for i in range(len(rollout)):
         start_time = time.time()
         single_trajectory = rollout[i]
@@ -317,9 +319,13 @@ def evaluate_rollout(rollout_pth, base_output_dir,plot=True):
         step_y_loss_avg = torch.mean(torch.tensor(step_loss['deform_y']))
         step_y_loss_max = torch.max(torch.tensor(step_loss['max_deform_y']))
         average_deformation_error.append(step_y_loss_avg)
+        max_deformation_error.append(step_y_loss_max)
         # Save the list to a .pkl file
-        with open('/home/ujwal/NEWPRESSNET/PressNet/Local/data/output/regDGCNN_seg/Channel_U_press_dataset/Thu-Jul-24-03-08-09-2025/rollout/rollout_evaluation_DGCNN_Channel_U_400_coarse/Average_deformation_error.pkl', 'wb') as file:
+        with open('/home/ujwal/NEWPRESSNET/PressNet/Local/data/output/transolver/quarter_s_press_dataset/Tue-Jul-29-12-53-43-2025/rollout/rollout_evaluation_transolver_400_coarse/Average_deformation_error.pkl', 'wb') as file:
             pickle.dump(average_deformation_error, file)
+
+        with open('//home/ujwal/NEWPRESSNET/PressNet/Local/data/output/transolver/quarter_s_press_dataset/Tue-Jul-29-12-53-43-2025/rollout/rollout_evaluation_transolver_400_coarse/Max_deformation_error.pkl', 'wb') as file:
+            pickle.dump(max_deformation_error, file)
 
         print("step loss:","y_avg",step_y_loss_avg,"y_max",step_y_loss_max) #"stress_avg",step_stress_loss_avg,"stress_max",step_stress_loss_max,
         if plot:
@@ -369,9 +375,9 @@ def evaluate_rollout(rollout_pth, base_output_dir,plot=True):
     return
 
 def main():
-    base_dir = "/home/ujwal/NEWPRESSNET/PressNet/Local/data/output/regDGCNN_seg/Channel_U_press_dataset/Thu-Jul-24-03-08-09-2025/rollout"
-    rollout_pth = os.path.join(base_dir,'rollout_epoch_900.pkl')
-    output_dir = os.path.join(base_dir,'rollout_evaluation_DGCNN_Channel_U_400_coarse')
+    base_dir = "/home/ujwal/NEWPRESSNET/PressNet/Local/data/output/transolver/quarter_s_press_dataset/Tue-Jul-29-12-53-43-2025/rollout"
+    rollout_pth = os.path.join(base_dir,'rollout_epoch_999.pkl')
+    output_dir = os.path.join(base_dir,'rollout_evaluation_transolver_400_coarse')
     evaluate_rollout(rollout_pth, output_dir,plot=True)
 
 if __name__ == "__main__":
