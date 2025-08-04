@@ -88,8 +88,8 @@ def save_multiple_trajectories_to_h5(raw_folder_path, output_folder_path, device
 
 def main():
     device = torch.device('cuda')
-    raw_folder_path = "/home/ujwal/NEWPRESSNET/PressNet/Local/data/raw_data/data_n_test"
-    output_folder_path = "/home/ujwal/NEWPRESSNET/PressNet/Local/data/extracted_data"
+    raw_folder_path = "/home/ujwal/NewPressnet/local/raw_data/Channel_V_data"
+    output_folder_path = "/home/ujwal/NewPressnet/local/extracted_data"
      # Save multiple trajectories from different folders into the HDF5 file
     # print(list_subfolders(raw_folder_path))
     save_multiple_trajectories_to_h5(raw_folder_path, output_folder_path, device)
