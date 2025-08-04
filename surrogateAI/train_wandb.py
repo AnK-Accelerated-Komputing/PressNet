@@ -81,24 +81,74 @@ def squeeze_data(data):
     transformed_data = {key: value.squeeze(0) for key, value in data.items()}
     return transformed_data
 
+def load_checkpoint(model, optimizer, scheduler, checkpoint_dir):
+    """Load model, optimizer, scheduler, and epoch from checkpoint."""
+
+    checkpoint_path = os.path.join(checkpoint_dir, "epoch_checkpoint.pth")
+    model_path = os.path.join(checkpoint_dir, "epoch_model_checkpoint_learned_model.pth")
+    optimizer_path = os.path.join(checkpoint_dir, "epoch_optimizer_checkpoint.pth")
+    scheduler_path = os.path.join(checkpoint_dir, "epoch_scheduler_checkpoint.pth")
+    loss_record_path = os.path.join(checkpoint_dir, "../log/temp_train_loss.pkl")
+
+    start_epoch = 0
+    epoch_training_losses = []
+    step_training_losses = []
+
+    if os.path.exists(checkpoint_path) and os.path.exists(model_path):
+        try:
+            epoch_model_checkpoint_path = os.path.join(checkpoint_dir,"epoch_model_checkpoint")
+            model.load_model(epoch_model_checkpoint_path)
+            print(f"Loaded model checkpoint")
+            
+            checkpoint = torch.load(checkpoint_path, map_location=device)
+            start_epoch = checkpoint['epoch'] + 1
+            print(f"Resuming from epoch {start_epoch}")
+
+            # model.load_state_dict(torch.load(model_path, map_location=device))
+            # print(f"Loaded model checkpoint from {model_path}")
+
+            if os.path.exists(optimizer_path):
+                optimizer.load_state_dict(torch.load(optimizer_path, map_location=device))
+                print(f"Loaded optimizer checkpoint from {optimizer_path}")
+
+            if os.path.exists(scheduler_path):
+                scheduler.load_state_dict(torch.load(scheduler_path, map_location=device))
+                print(f"Loaded scheduler checkpoint from {scheduler_path}")
+
+            if os.path.exists(loss_record_path):
+                loss_record = pickle_load(loss_record_path)
+                epoch_training_losses = loss_record.get('train_epoch_losses', [])
+                step_training_losses = loss_record.get('all_step_train_losses', [])
+                print(f"Loaded loss records from {loss_record_path}")
+
+        except Exception as e:
+            print(f"Error loading checkpoints: {e}. Starting from scratch.")
+            start_epoch = 0
+            epoch_training_losses = []
+            step_training_losses = []
+    else:
+        print("No checkpoints found. Starting from scratch.")
+
+    return start_epoch, epoch_training_losses, step_training_losses
 
 def main():
     device = torch.device('cuda')
 
     # Initialize Wandb
-    wandb.init(project="Journal Experiment Individual Data", config={
+    wandb.init(project="Journal S-Quarter Press", config={
         "learning_rate": 0.001,
         "epochs": 1000,
         "batch_size": 1,
-        "model": "DGCNN",
-        "dataset": "Channel_U_400_coarse_mesh"
+        "model": "encode_process_decode",
+        "dataset": "quarter s dataset: 400 step coarse",
+        "message_passing_layer": "7"
     })
 
     start_epoch = 0
     start_time = time.time()
     end_epoch = 1000
     print(f"starting training from epoch {start_epoch} to {end_epoch}")
-    train_data_path = "/home/ujwal/NEWPRESSNET/PressNet/Local/data/input/Channel_U_press_dataset.h5"
+    train_data_path = "//home/ujwal/NEWPRESSNET/PressNet/Local/data/input/quarter_s_press_dataset.h5"
     output_dir = "/home/ujwal/NEWPRESSNET/PressNet/Local/data/output"
     train_dataset = TrajectoryDataset(train_data_path, split='train', stage=1)
     val_dataset = TrajectoryDataset(train_data_path, split='val', stage=1)
@@ -125,15 +175,25 @@ def main():
     #     model = press_model_GCN.GCN(nfeat=9,nhid=64,output=3,dropout=0.2,edge_dim=4)
 
     params = dict(field='world_pos', size=3, model=press_model, evaluator=press_eval)
-    core_model = 'regDGCNN_seg'
+    core_model = 'encode_process_decode'
     model = press_model.Model(params,core_model_name=core_model)
     model = model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, 0.1 + 1e-6, last_epoch=-1)
-    checkpoint_dir, log_dir, rollout_dir = prepare_files_and_directories(output_dir,core_model,train_data_path)
     
-    epoch_training_losses = []
-    step_training_losses = []
+
+    resume_from_existing = False
+
+    if resume_from_existing:
+        checkpoint_dir = '/home/ujwal/NEWPRESSNET/PressNet/Local/data/output/encode_process_decode/Channel_U_press_dataset/Fri-Jul-25-11-07-32-2025/checkpoint'
+        log_dir = '/home/ujwal/NEWPRESSNET/PressNet/Local/data/output/encode_process_decode/Channel_U_press_dataset/Fri-Jul-25-11-07-32-2025/log'
+        rollout_dir = '/home/ujwal/NEWPRESSNET/PressNet/Local/data/output/encode_process_decode/Channel_U_press_dataset/Fri-Jul-25-11-07-32-2025/rollout'
+    else:   
+        checkpoint_dir, log_dir, rollout_dir = prepare_files_and_directories(output_dir, core_model, train_data_path)
+    
+    start_epoch, epoch_training_losses, step_training_losses = load_checkpoint(model, optimizer, scheduler, checkpoint_dir)
+    
+ 
     epoch_run_times = []
 
     for epoch in range(start_epoch, end_epoch):
@@ -241,6 +301,7 @@ def main():
             })
 
         epoch_run_times.append(time.time() - epoch_start_time)
+        pickle_save(os.path.join(log_dir, 'epoch_run_times_upto_epoch.pkl'), epoch_run_times)
 
     pickle_save(os.path.join(log_dir, 'epoch_run_times.pkl'), epoch_run_times)
     model.save_model(os.path.join(checkpoint_dir, "model_checkpoint"))
