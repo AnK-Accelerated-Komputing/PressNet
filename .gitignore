@@ -8,3 +8,9 @@ surrogateAI/results
 datasets/utilities/__pycache__
 datasets/data
 /data
+/local
+/surrogateAI/wandb
+__pycache__
+/surrogateAI/models/__pycache__
+**.pyc
+
