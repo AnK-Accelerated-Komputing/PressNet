@@ -135,22 +135,22 @@ def main():
     device = torch.device('cuda')
 
     # Initialize Wandb
-    wandb.init(project="test", config={
+    wandb.init(project="model.eval() analysis", config={
         "learning_rate": 0.001,
         "epochs": 1000,
         "batch_size": 1,
-        "model": "encode_process_decode",
+        "model": "transolver",
         "dataset": "quarter s dataset: 400 step coarse",
-        "message_passing_layer": "7",
-        "dropout": "0.4"
+        # "message_passing_layer": "7",
+        # "dropout": "0.4"
     })
 
     start_epoch = 0
     start_time = time.time()
     end_epoch = 1000
     print(f"starting training from epoch {start_epoch} to {end_epoch}")
-    train_data_path = "//home/ujwal/NEWPRESSNET/PressNet/Local/data/input/quarter_s_press_dataset.h5"
-    output_dir = "/home/ujwal/NEWPRESSNET/PressNet/Local/test/output"
+    train_data_path = "/home/ujwal/NEWPRESSNET/PressNet/Local/data/input/quarter_s_press_dataset.h5"
+    output_dir = "/home/ujwal/NEWPRESSNET/PressNet/Local/data/output_model_eval"
     train_dataset = TrajectoryDataset(train_data_path, split='train', stage=1)
     val_dataset = TrajectoryDataset(train_data_path, split='val', stage=1)
     # print(len(train_dataset),len(train_dataset)*3/399)
@@ -176,11 +176,23 @@ def main():
     #     model = press_model_GCN.GCN(nfeat=9,nhid=64,output=3,dropout=0.2,edge_dim=4)
 
     params = dict(field='world_pos', size=3, model=press_model, evaluator=press_eval)
-    core_model = 'encode_process_decode'
+    core_model = 'transolver'
     model = press_model.Model(params,core_model_name=core_model)
     model = model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
-    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, 0.1 + 1e-6, last_epoch=-1)
+    # scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, 0.1 + 1e-6, last_epoch=-1)
+    scheduler = torch.optim.lr_scheduler.OneCycleLR(
+        optimizer,
+        max_lr=0.001,
+        total_steps=(end_epoch) * len(train_dataloader),
+        pct_start=0.3,
+        anneal_strategy='cos',
+        cycle_momentum=True,
+        base_momentum=0.85,
+        max_momentum=0.95,
+        div_factor=25.0,
+        final_div_factor=10000.0
+    )
     
 
     resume_from_existing = False
@@ -204,6 +216,7 @@ def main():
         epoch_training_loss = 0.0
 
         print(" training")
+        model.train()
         for data in train_dataloader:
             frame = squeeze_data_frame(data)
             output = model(frame,is_training=True)
@@ -211,6 +224,7 @@ def main():
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+            scheduler.step()
             step_training_losses.append(loss.detach().cpu())
             epoch_training_loss += loss.detach().cpu()
 
@@ -251,8 +265,8 @@ def main():
         torch.save(scheduler.state_dict(),os.path.join(checkpoint_dir,"epoch_scheduler_checkpoint" + ".pth"))
         torch.save({'epoch': epoch}, os.path.join(checkpoint_dir, "epoch_checkpoint.pth"))
         
-        if epoch == 13:
-            scheduler.step()
+        # if epoch == 13:
+        #     scheduler.step()
 
 
         if epoch%2 == 0 or epoch == 0 or epoch == end_epoch-1:
@@ -265,6 +279,7 @@ def main():
             mse_loss_fn = torch.nn.MSELoss()
             l1_loss_fn = torch.nn.L1Loss()
             print(" evaluation")
+            model.eval()
             for data in val_loader:
                 ##
                 # print(data)
