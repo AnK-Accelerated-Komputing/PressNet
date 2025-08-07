@@ -154,37 +154,56 @@ def save_rollout_frames(rollout_data,save_directory,i=0,key="stress"):
                 showscale=True,
                 coloraxis="coloraxis",
                 # colorscale='viridis',
-                opacity=1
+                opacity=1,
+                flatshading=True, # Optional: Makes faces uniformly colored, removes gradient shading across faces
+                lighting=dict(
+                    ambient=1.0,  # Maximize ambient light (uniform light from all directions)
+                    diffuse=0.0,  # Minimize diffuse light (light reflecting equally in all directions)
+                    specular=0.0, # Minimize specular light (highlights from direct light sources)
+                    roughness=1.0, # Maximize roughness to spread any remaining light widely
+                    fresnel=0.0   # Minimize Fresnel effect (reflectivity based on view angle)
+                ),
+                lightposition=dict(x=0, y=0, z=0)
             ), row=1, col=2
         )
 
-        frame_fig.add_trace(
-            go.Mesh3d(
-                x=pred_mask_x_2, y=pred_mask_y_2, z=pred_mask_z_2,
-                i=i, j=j, k=k,
-                # intensity=pred_masked_intensity_2,
-                showscale=True,
-                color="white",
-                # coloraxis="coloraxis",
-                # colorscale='viridis',
-                opacity=1
-            ), row=1, col=2
-        )
+        # frame_fig.add_trace(
+        #     go.Mesh3d(
+        #         x=pred_mask_x_2, y=pred_mask_y_2, z=pred_mask_z_2,
+        #         i=i, j=j, k=k,
+        #         # intensity=pred_masked_intensity_2,
+        #         showscale=True,
+        #         color="#C4A484",
+        #         # coloraxis="coloraxis",
+        #         # colorscale='viridis',
+        #         opacity=0.4,
 
-        frame_fig.add_trace(
-            go.Scatter3d(
-                x=pred_x, y=pred_y, z=pred_z,
-                mode="markers",
-                marker=dict(size=0.4, color='black'),
-                name="Predicted Nodes"
-            ), row=1, col=2
-        )
+        #         flatshading=True, # Optional: Makes faces uniformly colored, removes gradient shading across faces
+        #         lighting=dict(
+        #             ambient=1.0,  # Maximize ambient light (uniform light from all directions)
+        #             diffuse=0.0,  # Minimize diffuse light (light reflecting equally in all directions)
+        #             specular=0.0, # Minimize specular light (highlights from direct light sources)
+        #             roughness=1.0, # Maximize roughness to spread any remaining light widely
+        #             fresnel=0.0   # Minimize Fresnel effect (reflectivity based on view angle)
+        #         ),
+        #         lightposition=dict(x=0, y=0, z=0)
+        #     ), row=1, col=2
+        # )
+
+        # frame_fig.add_trace(
+        #     go.Scatter3d(
+        #         x=pred_x, y=pred_y, z=pred_z,
+        #         mode="markers",
+        #         marker=dict(size=0.2, color='black'),
+        #         name="Predicted Nodes"
+        #     ), row=1, col=2
+        # )
 
         frame_fig.add_trace(
             go.Scatter3d(
                 x=pred_edges_x, y=pred_edges_y, z=pred_edges_z,
                 mode='lines',
-                line=dict(color='black', width=0.8),
+                line=dict(color='black', width=0.2),
                 name='Predicted Edges'
             ), row=1, col=2
         )
