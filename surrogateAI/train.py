@@ -132,6 +132,7 @@ def main():
         epoch_training_loss = 0.0
 
         print(" training")
+        model.train()
         for data in train_dataloader:
             frame = squeeze_data_frame(data)
             output = model(frame,is_training=True)
@@ -182,6 +183,7 @@ def main():
             mse_loss_fn = torch.nn.MSELoss()
             l1_loss_fn = torch.nn.L1Loss()
             print(" evaluation")
+            model.eval()
             for data in val_loader:
                 ##
                 # print(data)
