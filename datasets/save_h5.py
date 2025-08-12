@@ -11,7 +11,7 @@ def list_subfolders(directory):
 def save_multiple_trajectories_to_h5(raw_folder_path, output_folder_path, device):
     basename = os.path.basename(raw_folder_path)
     h5_path = os.path.join(output_folder_path, f"{basename}.h5")
-    meta_json_path = os.path.join(output_folder_path, f"{basename}.json")
+    meta_json_path = os.path.join(output_folder_path, f"{basename}_meta.json")
     with h5py.File(h5_path, 'w') as f:
 
         group_to_folder_map = {}  # Initialize dictionary for the mapping
