@@ -233,15 +233,14 @@ class regDGCNN_seg(nn.Module):
         self.emb_dims = emb_dims
         self.dropout = dropout
 
-        self.bn1 = nn.BatchNorm2d(64)
-        self.bn2 = nn.BatchNorm2d(64)
-        self.bn3 = nn.BatchNorm2d(64)
-        self.bn4 = nn.BatchNorm2d(64)
-        self.bn5 = nn.BatchNorm2d(64)
-        self.bn6 = nn.BatchNorm1d(self.emb_dims)
-        self.bn7 = nn.BatchNorm1d(512)
-        self.bn8 = nn.BatchNorm1d(256)
-
+        self.bn1 = nn.GroupNorm(num_groups=8,  num_channels=64)
+        self.bn2 = nn.GroupNorm(num_groups=8,  num_channels=64)
+        self.bn3 = nn.GroupNorm(num_groups=8,  num_channels=64)
+        self.bn4 = nn.GroupNorm(num_groups=8,  num_channels=64)
+        self.bn5 = nn.GroupNorm(num_groups=8,  num_channels=64)
+        self.bn6 = nn.GroupNorm(num_groups=8,  num_channels=self.emb_dims)
+        self.bn7 = nn.GroupNorm(num_groups=8,  num_channels=512)
+        self.bn8 = nn.GroupNorm(num_groups=8,  num_channels=256)
         self.conv1 = nn.Sequential(nn.Conv2d(self.input_dims*2, 64, kernel_size=1, bias=False),
                                    self.bn1,
                                    nn.LeakyReLU(negative_slope=0.2))
