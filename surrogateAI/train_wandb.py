@@ -135,14 +135,18 @@ def main():
     device = torch.device('cuda')
 
     # Initialize Wandb
-    wandb.init(project="model.eval() analysis", config={
+    wandb.init(project="Early Stopping Checking", config={
         "learning_rate": 0.001,
         "epochs": 1000,
         "batch_size": 1,
-        "model": "transolver",
+        "model": "MeshGraphNet",
         "dataset": "quarter s dataset: 400 step coarse",
-        # "message_passing_layer": "7",
-        # "dropout": "0.4"
+        # "message_passing_step": "3",
+        # "dropout": "0.4",
+        "scheduler": "CosineAnnealingWarmRestarts",  # Updated config
+        "T_0": 50,  # Initial cycle length
+        "T_mult": 1,  # Cycle length multiplier
+        "eta_min": 1e-6  # Minimum learning rate
     })
 
     start_epoch = 0
@@ -176,23 +180,38 @@ def main():
     #     model = press_model_GCN.GCN(nfeat=9,nhid=64,output=3,dropout=0.2,edge_dim=4)
 
     params = dict(field='world_pos', size=3, model=press_model, evaluator=press_eval)
-    core_model = 'transolver'
+    core_model = 'encode_process_decode'
     model = press_model.Model(params,core_model_name=core_model)
     model = model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
-    # scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, 0.1 + 1e-6, last_epoch=-1)
-    scheduler = torch.optim.lr_scheduler.OneCycleLR(
+
+    # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+    #     optimizer,
+    #     T_max=50,  # Cycle length in epochs
+    #     eta_min=1e-6  # Minimum learning rate
+    # )
+
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
         optimizer,
-        max_lr=0.001,
-        total_steps=(end_epoch) * len(train_dataloader),
-        pct_start=0.3,
-        anneal_strategy='cos',
-        cycle_momentum=True,
-        base_momentum=0.85,
-        max_momentum=0.95,
-        div_factor=25.0,
-        final_div_factor=10000.0
+        T_0=50,  # Initial cycle length in epochs
+        T_mult=1,  # Multiplier for cycle length after each restart
+        eta_min=1e-6  # Minimum learning rate
     )
+
+    # scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, 0.1 + 1e-6, last_epoch=-1)
+
+    # scheduler = torch.optim.lr_scheduler.OneCycleLR(
+    #     optimizer,
+    #     max_lr=0.001,
+    #     total_steps=(end_epoch) * len(train_dataloader),
+    #     pct_start=0.3,
+    #     anneal_strategy='cos',
+    #     cycle_momentum=True,
+    #     base_momentum=0.85,
+    #     max_momentum=0.95,
+    #     div_factor=25.0,
+    #     final_div_factor=10000.0
+    # )
     
 
     resume_from_existing = False
@@ -205,11 +224,24 @@ def main():
         checkpoint_dir, log_dir, rollout_dir = prepare_files_and_directories(output_dir, core_model, train_data_path)
     
     start_epoch, epoch_training_losses, step_training_losses = load_checkpoint(model, optimizer, scheduler, checkpoint_dir)
+
+    
+    # --- New: Early Stopping and Best Checkpoint Variables ---
+    best_val_loss = float('inf')  # Track best validation loss
+    patience = 100  # Number of epochs to wait for improvement
+    patience_counter = 0  # Counter for epochs without improvement
+    delta = 0.001  # Minimum improvement required to reset patience
+    early_stop = False  # Flag to stop training
     
  
     epoch_run_times = []
 
     for epoch in range(start_epoch, end_epoch):
+        if early_stop:
+            print(f"Early stopping triggered at epoch {epoch+1}")
+            break
+
+
         print(f"running epoch {epoch+1}")
         epoch_start_time = time.time()
 
@@ -224,7 +256,7 @@ def main():
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            scheduler.step()
+            # scheduler.step()
             step_training_losses.append(loss.detach().cpu())
             epoch_training_loss += loss.detach().cpu()
 
@@ -243,6 +275,9 @@ def main():
             "learning_rate": scheduler.get_last_lr()[0]
         })
 
+        #for cosine anneling 
+        scheduler.step()
+
 
         loss_record = {}
         loss_record['train_total_loss'] = torch.sum(torch.stack(epoch_training_losses))
@@ -252,69 +287,101 @@ def main():
         loss_record['train_epoch_losses'] = epoch_training_losses
         loss_record['all_step_train_losses'] = step_training_losses
         # save train loss
-        temp_train_loss_pkl_file = os.path.join(log_dir, 'temp_train_loss.pkl')
-        Path(temp_train_loss_pkl_file).touch()
-        pickle_save(temp_train_loss_pkl_file, loss_record)
+
+        if epoch%50 == 0:
+            temp_train_loss_pkl_file = os.path.join(log_dir, 'temp_train_loss.pkl')
+            Path(temp_train_loss_pkl_file).touch()
+            pickle_save(temp_train_loss_pkl_file, loss_record)
+
         if epoch%250 == 0:
             pickle_save(temp_train_loss_pkl_file.replace(".pkl",f'_{epoch}.pkl'), loss_record)
 
 
-
-        model.save_model(os.path.join(checkpoint_dir,"epoch_model_checkpoint"))
-        torch.save(optimizer.state_dict(),os.path.join(checkpoint_dir,"epoch_optimizer_checkpoint" + ".pth"))
-        torch.save(scheduler.state_dict(),os.path.join(checkpoint_dir,"epoch_scheduler_checkpoint" + ".pth"))
-        torch.save({'epoch': epoch}, os.path.join(checkpoint_dir, "epoch_checkpoint.pth"))
+        if epoch%50 == 0:
+            model.save_model(os.path.join(checkpoint_dir,"epoch_model_checkpoint"))
+            torch.save(optimizer.state_dict(),os.path.join(checkpoint_dir,"epoch_optimizer_checkpoint" + ".pth"))
+            torch.save(scheduler.state_dict(),os.path.join(checkpoint_dir,"epoch_scheduler_checkpoint" + ".pth"))
+            torch.save({'epoch': epoch}, os.path.join(checkpoint_dir, "epoch_checkpoint.pth"))
         
         # if epoch == 13:
         #     scheduler.step()
 
 
-        if epoch%2 == 0 or epoch == 0 or epoch == end_epoch-1:
-            trajectories = []
+        # if epoch%2 == 0 or epoch == 0 or epoch == end_epoch-1: ##while using if condition please tab(move one tab backward) the subsequent codes
+        trajectories = []
+        mse_losses = []
+        l1_losses = []
+        save_file = "rollout_epoch_" + str(epoch) + ".pkl"
 
-            mse_losses = []
-            l1_losses = []
-            save_file = "rollout_epoch_" + str(epoch) + ".pkl"
-
-            mse_loss_fn = torch.nn.MSELoss()
-            l1_loss_fn = torch.nn.L1Loss()
-            print(" evaluation")
-            model.eval()
+        mse_loss_fn = torch.nn.MSELoss()
+        l1_loss_fn = torch.nn.L1Loss()
+        print(" evaluation")
+        model.eval()
+        with torch.no_grad():
             for data in val_loader:
-                ##
-                # print(data)
                 data=squeeze_data(data)
-                # print(len(data))
-                # print(data['next_pos'].shape)
-                # print(data['mesh_pos'].shape)
-                # print(data['node_type'].shape)
                 _, prediction_trajectory = press_eval.evaluate(model, data)
                 mse_loss = mse_loss_fn(torch.squeeze(data['next_pos'].to(device), dim=0), prediction_trajectory['pred_pos'])
                 l1_loss = l1_loss_fn(torch.squeeze(data['next_pos'].to(device), dim=0), prediction_trajectory['pred_pos'])
                 mse_losses.append(mse_loss.cpu())
                 l1_losses.append(l1_loss.cpu())
                 trajectories.append(prediction_trajectory)
-
+        if epoch%50 == 0:
             pickle_save(os.path.join(rollout_dir, save_file), trajectories)
-            loss_record = {}
-            loss_record['eval_total_mse_loss'] = torch.sum(torch.stack(mse_losses)).item()
-            loss_record['eval_total_l1_loss'] = torch.sum(torch.stack(l1_losses)).item()
-            loss_record['eval_mean_mse_loss'] = torch.mean(torch.stack(mse_losses)).item()
-            loss_record['eval_max_mse_loss'] = torch.max(torch.stack(mse_losses)).item()
-            loss_record['eval_min_mse_loss'] = torch.min(torch.stack(mse_losses)).item()
-            loss_record['eval_mean_l1_loss'] = torch.mean(torch.stack(l1_losses)).item()
-            loss_record['eval_max_l1_loss'] = torch.max(torch.stack(l1_losses)).item()
-            loss_record['eval_min_l1_loss'] = torch.min(torch.stack(l1_losses)).item()
-            loss_record['eval_mse_losses'] = mse_losses
-            loss_record['eval_l1_losses'] = l1_losses
+
+        loss_record = {}
+        loss_record['eval_total_mse_loss'] = torch.sum(torch.stack(mse_losses)).item()
+        loss_record['eval_total_l1_loss'] = torch.sum(torch.stack(l1_losses)).item()
+        loss_record['eval_mean_mse_loss'] = torch.mean(torch.stack(mse_losses)).item()
+        loss_record['eval_max_mse_loss'] = torch.max(torch.stack(mse_losses)).item()
+        loss_record['eval_min_mse_loss'] = torch.min(torch.stack(mse_losses)).item()
+        loss_record['eval_mean_l1_loss'] = torch.mean(torch.stack(l1_losses)).item()
+        loss_record['eval_max_l1_loss'] = torch.max(torch.stack(l1_losses)).item()
+        loss_record['eval_min_l1_loss'] = torch.min(torch.stack(l1_losses)).item()
+        loss_record['eval_mse_losses'] = mse_losses
+        loss_record['eval_l1_losses'] = l1_losses
+
+        if epoch%50 == 0:
             pickle_save(os.path.join(log_dir, f'eval_loss_epoch_{epoch}.pkl'), loss_record)
 
-            # Log evaluation losses to Wandb
-            wandb.log({
-                "epoch": epoch + 1,
-                "eval_mean_mse_loss": loss_record['eval_mean_mse_loss'],
-                "eval_mean_l1_loss": loss_record['eval_mean_l1_loss']
-            })
+        # Log evaluation losses to Wandb
+        wandb.log({
+            "epoch": epoch + 1,
+            "eval_mean_mse_loss": loss_record['eval_mean_mse_loss'],
+            "eval_mean_l1_loss": loss_record['eval_mean_l1_loss']
+        })
+
+        # --- New: Best Checkpoint Saving ---
+        current_val_loss = loss_record['eval_mean_l1_loss']
+        if current_val_loss < best_val_loss - delta:
+            print(f"New best validation loss: {current_val_loss:.6f} (previous: {best_val_loss:.6f})")
+            best_val_loss = current_val_loss
+            patience_counter = 0  # Reset patience counter
+            # Save best checkpoint
+            # torch.save({
+            #     'epoch': epoch,
+            #     'model_state_dict': model.state_dict(),
+            #     'optimizer_state_dict': optimizer.state_dict(),
+            #     'scheduler_state_dict': scheduler.state_dict(),
+            #     'best_val_loss': best_val_loss
+            # }, os.path.join(checkpoint_dir, "best_checkpoint.pth"))
+            # model.save_model(os.path.join(checkpoint_dir, "best_model_checkpoint"))
+
+            model.save_model(os.path.join(checkpoint_dir,"best_model_checkpoint"))
+            torch.save(optimizer.state_dict(),os.path.join(checkpoint_dir,"best_optimizer_checkpoint" + ".pth"))
+            torch.save(scheduler.state_dict(),os.path.join(checkpoint_dir,"best_scheduler_checkpoint" + ".pth"))
+            torch.save({'epoch': epoch}, os.path.join(checkpoint_dir, "best_epoch_checkpoint.pth"))
+            print(f"Saved best checkpoint at epoch {epoch+1}")
+            pickle_save(os.path.join(rollout_dir, save_file), trajectories)
+
+        else:
+            patience_counter += 1
+            print(f"No improvement in validation loss. Patience counter: {patience_counter}/{patience}")
+
+        # --- New: Early Stopping ---
+        if patience_counter >= patience:
+            print(f"Early stopping: No improvement in validation loss for {patience} epochs")
+            early_stop = True
 
         epoch_run_times.append(time.time() - epoch_start_time)
         pickle_save(os.path.join(log_dir, 'epoch_run_times_upto_epoch.pkl'), epoch_run_times)
