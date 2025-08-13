@@ -154,7 +154,16 @@ def save_rollout_frames(rollout_data,save_directory,i=0,key="stress"):
                 showscale=True,
                 coloraxis="coloraxis",
                 # colorscale='viridis',
-                opacity=1
+                opacity=1,
+                flatshading=True, # Optional: Makes faces uniformly colored, removes gradient shading across faces
+                lighting=dict(
+                    ambient=1.0,  # Maximize ambient light (uniform light from all directions)
+                    diffuse=0.0,  # Minimize diffuse light (light reflecting equally in all directions)
+                    specular=0.0, # Minimize specular light (highlights from direct light sources)
+                    roughness=1.0, # Maximize roughness to spread any remaining light widely
+                    fresnel=0.0   # Minimize Fresnel effect (reflectivity based on view angle)
+                ),
+                lightposition=dict(x=0, y=0, z=0)
             ), row=1, col=2
         )
 
@@ -164,10 +173,20 @@ def save_rollout_frames(rollout_data,save_directory,i=0,key="stress"):
                 i=i, j=j, k=k,
                 # intensity=pred_masked_intensity_2,
                 showscale=True,
-                color="white",
+                color="#C4A484",
                 # coloraxis="coloraxis",
                 # colorscale='viridis',
-                opacity=1
+                opacity=1,
+
+                flatshading=True, # Optional: Makes faces uniformly colored, removes gradient shading across faces
+                lighting=dict(
+                    ambient=1.0,  # Maximize ambient light (uniform light from all directions)
+                    diffuse=0.0,  # Minimize diffuse light (light reflecting equally in all directions)
+                    specular=0.0, # Minimize specular light (highlights from direct light sources)
+                    roughness=1.0, # Maximize roughness to spread any remaining light widely
+                    fresnel=0.0   # Minimize Fresnel effect (reflectivity based on view angle)
+                ),
+                lightposition=dict(x=0, y=0, z=0)
             ), row=1, col=2
         )
 
@@ -175,7 +194,7 @@ def save_rollout_frames(rollout_data,save_directory,i=0,key="stress"):
             go.Scatter3d(
                 x=pred_x, y=pred_y, z=pred_z,
                 mode="markers",
-                marker=dict(size=0.4, color='black'),
+                marker=dict(size=0.2, color='black'),
                 name="Predicted Nodes"
             ), row=1, col=2
         )
@@ -184,7 +203,7 @@ def save_rollout_frames(rollout_data,save_directory,i=0,key="stress"):
             go.Scatter3d(
                 x=pred_edges_x, y=pred_edges_y, z=pred_edges_z,
                 mode='lines',
-                line=dict(color='black', width=0.8),
+                line=dict(color='black', width=0.2),
                 name='Predicted Edges'
             ), row=1, col=2
         )
@@ -198,7 +217,16 @@ def save_rollout_frames(rollout_data,save_directory,i=0,key="stress"):
                 showscale=False,
                 coloraxis="coloraxis",
                 # colorscale='viridis',
-                opacity=1
+                opacity=1,
+                flatshading=True, # Optional: Makes faces uniformly colored, removes gradient shading across faces
+                lighting=dict(
+                    ambient=1.0,  # Maximize ambient light (uniform light from all directions)
+                    diffuse=0.0,  # Minimize diffuse light (light reflecting equally in all directions)
+                    specular=0.0, # Minimize specular light (highlights from direct light sources)
+                    roughness=1.0, # Maximize roughness to spread any remaining light widely
+                    fresnel=0.0   # Minimize Fresnel effect (reflectivity based on view angle)
+                ),
+                lightposition=dict(x=0, y=0, z=0)
             ), row=1, col=1
         )
 
@@ -208,10 +236,19 @@ def save_rollout_frames(rollout_data,save_directory,i=0,key="stress"):
                 i=i, j=j, k=k,
                 # intensity=gt_masked_intensity_2,
                 showscale=False,
-                color="white",
+                color="#C4A484",
                 # coloraxis="coloraxis",
                 # colorscale='viridis',
-                opacity=1
+                opacity=1,
+                flatshading=True, # Optional: Makes faces uniformly colored, removes gradient shading across faces
+                lighting=dict(
+                    ambient=1.0,  # Maximize ambient light (uniform light from all directions)
+                    diffuse=0.0,  # Minimize diffuse light (light reflecting equally in all directions)
+                    specular=0.0, # Minimize specular light (highlights from direct light sources)
+                    roughness=1.0, # Maximize roughness to spread any remaining light widely
+                    fresnel=0.0   # Minimize Fresnel effect (reflectivity based on view angle)
+                ),
+                lightposition=dict(x=0, y=0, z=0)
             ), row=1, col=1
         )
 
@@ -228,7 +265,7 @@ def save_rollout_frames(rollout_data,save_directory,i=0,key="stress"):
             go.Scatter3d(
                 x=gt_edges_x, y=gt_edges_y, z=gt_edges_z,
                 mode='lines',
-                line=dict(color='black', width=0.8),
+                line=dict(color='black', width=0.4),
                 name='Ground Truth Edges'
             ), row=1, col=1
         )
@@ -314,7 +351,7 @@ def generate_gif(save_directory,fps=5,loop=0):
 
     return 'animated gif saved'
       
-def animate_rollout(data_path, save_directory,i=0,key="stress"):
+def animate_rollout(data_path, save_directory,i=1,key="stress"):
     with open(data_path, 'rb') as fp:
         rollout_data = pickle.load(fp)
     print(len(rollout_data))
@@ -324,8 +361,8 @@ def animate_rollout(data_path, save_directory,i=0,key="stress"):
 
 
 def main():
-    data_path =  '/home/user/PressNet/surrogateAI/training_output/regDGCNN_seg/Channel_rect_press_dataset/Tue-Mar-18-13-42-20-2025/rollout/rollout_epoch_350.pkl'
-    save_directory = '/home/user/PressNet/surrogateAI/results/regDGCNN/Channel_rect_press_dataset/400_step'
+    data_path =  '/home/ujwal/NEWPRESSNET/PressNet/Local/data/output/transolver/quarter_s_press_dataset/Tue-Jul-29-12-53-43-2025/rollout/rollout_epoch_999.pkl'
+    save_directory = '/home/ujwal/NEWPRESSNET/PressNet/Local/test/output'
     os.makedirs(save_directory,exist_ok=True)
     animate_rollout(data_path, save_directory)
 
