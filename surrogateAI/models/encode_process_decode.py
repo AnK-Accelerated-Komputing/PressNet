@@ -35,14 +35,17 @@ device = torch.device('cuda')
 
 
 class LazyMLP(nn.Module):
-    def __init__(self, output_sizes):
+    def __init__(self, output_sizes, dropout_rate = 0.0):
         super().__init__()
+        self.dropout_rate = dropout_rate
         num_layers = len(output_sizes)
         self._layers_ordered_dict = OrderedDict()
         for index, output_size in enumerate(output_sizes):
             self._layers_ordered_dict["linear_" + str(index)] = nn.LazyLinear(output_size)
             if index < (num_layers - 1):
                 self._layers_ordered_dict["relu_" + str(index)] = nn.ReLU()
+                if self.dropout_rate > 0:
+                    self._layers_ordered_dict["dropout_" + str(index)] = nn.Dropout(p=self.dropout_rate)
         self.layers = nn.Sequential(self._layers_ordered_dict)
 
     def forward(self, input):
@@ -278,13 +281,15 @@ class EncodeProcessDecode(nn.Module):
                  output_size,
                  latent_size,
                  num_layers,
-                 message_passing_aggregator, message_passing_steps, attention):
+                 message_passing_aggregator, message_passing_steps, attention,dropout_rate):
         super().__init__()
         self._latent_size = latent_size
         self._output_size = output_size
         self._num_layers = num_layers
         self._message_passing_steps = message_passing_steps
         self._message_passing_aggregator = message_passing_aggregator
+        self._attention = attention
+        self._dropout_rate = dropout_rate
 
         self._attention = attention     
 
@@ -300,7 +305,7 @@ class EncodeProcessDecode(nn.Module):
     def _make_mlp(self, output_size, layer_norm=True):
         """Builds an MLP."""
         widths = [self._latent_size] * self._num_layers + [output_size]
-        network = LazyMLP(widths)
+        network = LazyMLP(widths, dropout_rate=self._dropout_rate)
         if layer_norm:
             network = nn.Sequential(network, nn.LayerNorm(normalized_shape=widths[-1]))
         return network
