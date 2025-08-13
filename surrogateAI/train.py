@@ -168,8 +168,44 @@ def main():
     model = press_model.Model(params,core_model_name=core_model)
     model = model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
-    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, 0.1 + 1e-6, last_epoch=-1)
-    checkpoint_dir, log_dir, rollout_dir = prepare_files_and_directories(output_dir,core_model,train_data_path)
+
+    # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+    #     optimizer,
+    #     T_max=50,  # Cycle length in epochs
+    #     eta_min=1e-6  # Minimum learning rate
+    # )
+
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+        optimizer,
+        T_0=50,  # Initial cycle length in epochs
+        T_mult=1,  # Multiplier for cycle length after each restart
+        eta_min=1e-6  # Minimum learning rate
+    )
+
+    # scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, 0.1 + 1e-6, last_epoch=-1)
+
+    # scheduler = torch.optim.lr_scheduler.OneCycleLR(
+    #     optimizer,
+    #     max_lr=0.001,
+    #     total_steps=(end_epoch) * len(train_dataloader),
+    #     pct_start=0.3,
+    #     anneal_strategy='cos',
+    #     cycle_momentum=True,
+    #     base_momentum=0.85,
+    #     max_momentum=0.95,
+    #     div_factor=25.0,
+    #     final_div_factor=10000.0
+    # )
+    
+
+    resume_from_existing = False
+
+    if resume_from_existing:
+        checkpoint_dir = '/home/ujwal/NEWPRESSNET/PressNet/Local/data/output/encode_process_decode/Channel_U_press_dataset/Fri-Jul-25-11-07-32-2025/checkpoint'
+        log_dir = '/home/ujwal/NEWPRESSNET/PressNet/Local/data/output/encode_process_decode/Channel_U_press_dataset/Fri-Jul-25-11-07-32-2025/log'
+        rollout_dir = '/home/ujwal/NEWPRESSNET/PressNet/Local/data/output/encode_process_decode/Channel_U_press_dataset/Fri-Jul-25-11-07-32-2025/rollout'
+    else:   
+        checkpoint_dir, log_dir, rollout_dir = prepare_files_and_directories(output_dir, core_model, train_data_path)
     
     epoch_training_losses = []
     step_training_losses = []
