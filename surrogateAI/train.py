@@ -3,6 +3,7 @@ from pathlib import Path
 import pickle
 import time
 import datetime
+import gc
 
 import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -205,18 +206,21 @@ def main():
         loss_record['train_epoch_losses'] = epoch_training_losses
         loss_record['all_step_train_losses'] = step_training_losses
         # save train loss
-        temp_train_loss_pkl_file = os.path.join(log_dir, 'temp_train_loss.pkl')
-        Path(temp_train_loss_pkl_file).touch()
-        pickle_save(temp_train_loss_pkl_file, loss_record)
+
+        if epoch%50 == 0:
+            temp_train_loss_pkl_file = os.path.join(log_dir, 'temp_train_loss.pkl')
+            Path(temp_train_loss_pkl_file).touch()
+            pickle_save(temp_train_loss_pkl_file, loss_record)
+
         if epoch%250 == 0:
             pickle_save(temp_train_loss_pkl_file.replace(".pkl",f'_{epoch}.pkl'), loss_record)
 
 
-
-        model.save_model(os.path.join(checkpoint_dir,"epoch_model_checkpoint"))
-        torch.save(optimizer.state_dict(),os.path.join(checkpoint_dir,"epoch_optimizer_checkpoint" + ".pth"))
-        torch.save(scheduler.state_dict(),os.path.join(checkpoint_dir,"epoch_scheduler_checkpoint" + ".pth"))
-        torch.save({'epoch': epoch}, os.path.join(checkpoint_dir, "epoch_checkpoint.pth"))
+        if epoch%50 == 0:
+            model.save_model(os.path.join(checkpoint_dir,"epoch_model_checkpoint"))
+            torch.save(optimizer.state_dict(),os.path.join(checkpoint_dir,"epoch_optimizer_checkpoint" + ".pth"))
+            torch.save(scheduler.state_dict(),os.path.join(checkpoint_dir,"epoch_scheduler_checkpoint" + ".pth"))
+            torch.save({'epoch': epoch}, os.path.join(checkpoint_dir, "epoch_checkpoint.pth"))
         
         if epoch == 13:
             scheduler.step()
@@ -247,7 +251,7 @@ def main():
                 mse_losses.append(mse_loss.cpu())
                 l1_losses.append(l1_loss.cpu())
                 trajectories.append(prediction_trajectory)
-
+        if epoch%50 == 0:
             pickle_save(os.path.join(rollout_dir, save_file), trajectories)
             loss_record = {}
             loss_record['eval_total_mse_loss'] = torch.sum(torch.stack(mse_losses)).item()
@@ -263,6 +267,7 @@ def main():
             pickle_save(os.path.join(log_dir, f'eval_loss_epoch_{epoch}.pkl'), loss_record)
 
         epoch_run_times.append(time.time() - epoch_start_time)
+        pickle_save(os.path.join(log_dir, 'epoch_run_times_upto_epoch.pkl'), epoch_run_times)
 
     pickle_save(os.path.join(log_dir, 'epoch_run_times.pkl'), epoch_run_times)
     model.save_model(os.path.join(checkpoint_dir, "model_checkpoint"))
