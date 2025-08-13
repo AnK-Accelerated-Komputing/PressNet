@@ -8,6 +8,7 @@ import gc
 import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 import numpy as np
+import wandb
 
 # from model import DGCNN, MagNet
 from utilities import press_eval, common
@@ -133,12 +134,28 @@ def load_checkpoint(model, optimizer, scheduler, checkpoint_dir):
 def main():
     device = torch.device('cuda')
 
+    # Initialize Wandb
+    wandb.init(project="Rollout_cell", config={
+        "learning_rate": 0.001,
+        "epochs": 1000,
+        "batch_size": 1,
+        "model": "regDGCNN_seg",
+        "dataset": "Channel_U_coarse_400",
+        # "message_passing_step": "3",
+        # "dropout": "0.4",
+        "scheduler": "CosineAnnealingWarmRestarts",  # Updated config
+        "T_0": 50,  # Initial cycle length
+        "T_mult": 1,  # Cycle length multiplier
+        "eta_min": 1e-6,  # Minimum learning rate,
+        "Shuffle": True
+    })
+
     start_epoch = 0
     start_time = time.time()
-    end_epoch = 1
+    end_epoch = 1000
     print(f"starting training from epoch {start_epoch} to {end_epoch}")
-    train_data_path = "data/merged_400_trimmed_press_dataset.h5"
-    output_dir = "training_output"
+    train_data_path = "/home/ujwal/NewPressnet/local/input/Channel_U_press_dataset.h5"
+    output_dir = "/home/ujwal/NewPressnet/local/output"
     train_dataset = TrajectoryDataset(train_data_path, split='train', stage=1)
     val_dataset = TrajectoryDataset(train_data_path, split='val', stage=1)
     # print(len(train_dataset),len(train_dataset)*3/399)
@@ -207,11 +224,25 @@ def main():
     else:   
         checkpoint_dir, log_dir, rollout_dir = prepare_files_and_directories(output_dir, core_model, train_data_path)
     
-    epoch_training_losses = []
-    step_training_losses = []
+    start_epoch, epoch_training_losses, step_training_losses = load_checkpoint(model, optimizer, scheduler, checkpoint_dir)
+
+    
+    # --- New: Early Stopping and Best Checkpoint Variables ---
+    best_val_loss = float('inf')  # Track best validation loss
+    patience = 100  # Number of epochs to wait for improvement
+    patience_counter = 0  # Counter for epochs without improvement
+    delta = 0.001  # Minimum improvement required to reset patience
+    early_stop = False  # Flag to stop training
+    
+ 
     epoch_run_times = []
 
     for epoch in range(start_epoch, end_epoch):
+        if early_stop:
+            print(f"Early stopping triggered at epoch {epoch+1}")
+            break
+
+
         print(f"running epoch {epoch+1}")
         epoch_start_time = time.time()
 
@@ -226,12 +257,27 @@ def main():
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+            # scheduler.step()
             step_training_losses.append(loss.detach().cpu())
-
             epoch_training_loss += loss.detach().cpu()
+
+            # Log step training loss to Wandb
+            wandb.log({"step_train_loss": loss.item()})
 
         epoch_training_losses.append(epoch_training_loss)
         print(f"epoch {epoch+1} training loss: {epoch_training_loss}, time taken: {time.time() - epoch_start_time}")
+        print(f"[GPU] Allocated: {torch.cuda.memory_allocated() / 1e6:.2f} MB | "
+          f"Reserved: {torch.cuda.memory_reserved() / 1e6:.2f} MB")
+        
+        # Log epoch training loss and learning rate to Wandb
+        wandb.log({
+            "epoch": epoch + 1,
+            "epoch_train_loss": epoch_training_loss.item(),
+            "learning_rate": scheduler.get_last_lr()[0]
+        })
+
+        #for cosine anneling 
+        scheduler.step()
 
 
         loss_record = {}
@@ -258,29 +304,23 @@ def main():
             torch.save(scheduler.state_dict(),os.path.join(checkpoint_dir,"epoch_scheduler_checkpoint" + ".pth"))
             torch.save({'epoch': epoch}, os.path.join(checkpoint_dir, "epoch_checkpoint.pth"))
         
-        if epoch == 13:
-            scheduler.step()
+        # if epoch == 13:
+        #     scheduler.step()
 
 
-        if epoch%50 == 0 or epoch == 0 or epoch == end_epoch-1:
-            trajectories = []
+        # if epoch%2 == 0 or epoch == 0 or epoch == end_epoch-1: ##while using if condition please tab(move one tab backward) the subsequent codes
+        trajectories = []
+        mse_losses = []
+        l1_losses = []
+        save_file = "rollout_epoch_" + str(epoch) + ".pkl"
 
-            mse_losses = []
-            l1_losses = []
-            save_file = "rollout_epoch_" + str(epoch) + ".pkl"
-
-            mse_loss_fn = torch.nn.MSELoss()
-            l1_loss_fn = torch.nn.L1Loss()
-            print(" evaluation")
-            model.eval()
+        mse_loss_fn = torch.nn.MSELoss()
+        l1_loss_fn = torch.nn.L1Loss()
+        print(" evaluation")
+        model.eval()
+        with torch.no_grad():
             for data in val_loader:
-                ##
-                # print(data)
                 data=squeeze_data(data)
-                # print(len(data))
-                # print(data['next_pos'].shape)
-                # print(data['mesh_pos'].shape)
-                # print(data['node_type'].shape)
                 _, prediction_trajectory = press_eval.evaluate(model, data)
                 mse_loss = mse_loss_fn(torch.squeeze(data['next_pos'].to(device), dim=0), prediction_trajectory['pred_pos'])
                 l1_loss = l1_loss_fn(torch.squeeze(data['next_pos'].to(device), dim=0), prediction_trajectory['pred_pos'])
@@ -289,18 +329,60 @@ def main():
                 trajectories.append(prediction_trajectory)
         if epoch%50 == 0:
             pickle_save(os.path.join(rollout_dir, save_file), trajectories)
-            loss_record = {}
-            loss_record['eval_total_mse_loss'] = torch.sum(torch.stack(mse_losses)).item()
-            loss_record['eval_total_l1_loss'] = torch.sum(torch.stack(l1_losses)).item()
-            loss_record['eval_mean_mse_loss'] = torch.mean(torch.stack(mse_losses)).item()
-            loss_record['eval_max_mse_loss'] = torch.max(torch.stack(mse_losses)).item()
-            loss_record['eval_min_mse_loss'] = torch.min(torch.stack(mse_losses)).item()
-            loss_record['eval_mean_l1_loss'] = torch.mean(torch.stack(l1_losses)).item()
-            loss_record['eval_max_l1_loss'] = torch.max(torch.stack(l1_losses)).item()
-            loss_record['eval_min_l1_loss'] = torch.min(torch.stack(l1_losses)).item()
-            loss_record['eval_mse_losses'] = mse_losses
-            loss_record['eval_l1_losses'] = l1_losses
+
+        loss_record = {}
+        loss_record['eval_total_mse_loss'] = torch.sum(torch.stack(mse_losses)).item()
+        loss_record['eval_total_l1_loss'] = torch.sum(torch.stack(l1_losses)).item()
+        loss_record['eval_mean_mse_loss'] = torch.mean(torch.stack(mse_losses)).item()
+        loss_record['eval_max_mse_loss'] = torch.max(torch.stack(mse_losses)).item()
+        loss_record['eval_min_mse_loss'] = torch.min(torch.stack(mse_losses)).item()
+        loss_record['eval_mean_l1_loss'] = torch.mean(torch.stack(l1_losses)).item()
+        loss_record['eval_max_l1_loss'] = torch.max(torch.stack(l1_losses)).item()
+        loss_record['eval_min_l1_loss'] = torch.min(torch.stack(l1_losses)).item()
+        loss_record['eval_mse_losses'] = mse_losses
+        loss_record['eval_l1_losses'] = l1_losses
+
+        if epoch%50 == 0:
             pickle_save(os.path.join(log_dir, f'eval_loss_epoch_{epoch}.pkl'), loss_record)
+
+        # Log evaluation losses to Wandb
+        wandb.log({
+            "epoch": epoch + 1,
+            "eval_mean_mse_loss": loss_record['eval_mean_mse_loss'],
+            "eval_mean_l1_loss": loss_record['eval_mean_l1_loss']
+        })
+
+        # --- New: Best Checkpoint Saving ---
+        current_val_loss = loss_record['eval_mean_l1_loss']
+        if current_val_loss < best_val_loss - delta:
+            print(f"New best validation loss: {current_val_loss:.6f} (previous: {best_val_loss:.6f})")
+            best_val_loss = current_val_loss
+            patience_counter = 0  # Reset patience counter
+            # Save best checkpoint
+            # torch.save({
+            #     'epoch': epoch,
+            #     'model_state_dict': model.state_dict(),
+            #     'optimizer_state_dict': optimizer.state_dict(),
+            #     'scheduler_state_dict': scheduler.state_dict(),
+            #     'best_val_loss': best_val_loss
+            # }, os.path.join(checkpoint_dir, "best_checkpoint.pth"))
+            # model.save_model(os.path.join(checkpoint_dir, "best_model_checkpoint"))
+
+            model.save_model(os.path.join(checkpoint_dir,"best_model_checkpoint"))
+            torch.save(optimizer.state_dict(),os.path.join(checkpoint_dir,"best_optimizer_checkpoint" + ".pth"))
+            torch.save(scheduler.state_dict(),os.path.join(checkpoint_dir,"best_scheduler_checkpoint" + ".pth"))
+            torch.save({'epoch': epoch}, os.path.join(checkpoint_dir, "best_epoch_checkpoint.pth"))
+            print(f"Saved best checkpoint at epoch {epoch+1}")
+            pickle_save(os.path.join(rollout_dir, save_file), trajectories)
+
+        else:
+            patience_counter += 1
+            print(f"No improvement in validation loss. Patience counter: {patience_counter}/{patience}")
+
+        # --- New: Early Stopping ---
+        if patience_counter >= patience:
+            print(f"Early stopping: No improvement in validation loss for {patience} epochs")
+            early_stop = True
 
         epoch_run_times.append(time.time() - epoch_start_time)
         pickle_save(os.path.join(log_dir, 'epoch_run_times_upto_epoch.pkl'), epoch_run_times)
@@ -311,6 +393,8 @@ def main():
     torch.save(scheduler.state_dict(), os.path.join(checkpoint_dir, "scheduler_checkpoint.pth"))
     
 
+    # Finish Wandb run
+    wandb.finish()
     
     return
     
