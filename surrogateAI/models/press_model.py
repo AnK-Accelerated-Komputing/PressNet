@@ -6,7 +6,7 @@ from torch import nn as nn
 # from torch import  as F
 
 from utilities import common
-from models import normalization, encode_process_decode, gcn, regDGCNN_seg, regpointnet_seg
+from models import normalization, encode_process_decode, gcn, regDGCNN_seg, regpointnet_seg, transolver
 
 import torch_scatter
 from torch_geometric.data import Data
@@ -19,7 +19,7 @@ class Model(nn.Module):
     """Model for static cloth simulation."""
 
     def __init__(self, params, core_model_name="encode_process_decode", message_passing_aggregator='sum',
-                 message_passing_steps=15, attention=False):
+                 message_passing_steps=3, attention=False):
         super(Model, self).__init__()
         self._params = params
         self._output_normalizer = normalization.Normalizer(size=3, name='output_normalizer')
@@ -39,10 +39,11 @@ class Model(nn.Module):
             self.is_multigraph = True
             self.learned_model = self.core_model.EncodeProcessDecode(
                 output_size=params['size'],
-                latent_size=128,
+                latent_size=64,
                 num_layers=2,
                 message_passing_steps=self.message_passing_steps,
-                message_passing_aggregator=self.message_passing_aggregator, attention=self._attention
+                message_passing_aggregator=self.message_passing_aggregator, attention=self._attention,
+                dropout_rate = 0.3
             )
 
         elif core_model_name == 'gcn':
@@ -71,6 +72,16 @@ class Model(nn.Module):
             self.learned_model = regpointnet_seg.regpointnet_seg(
                 output_size=params['size'],
                 input_channel=12
+            )
+        elif core_model_name == "transolver":
+            self.core_model = transolver
+            self.is_multigraph = False
+            self.learned_model = transolver.Model(n_hidden=256, n_layers=8, space_dim=3,
+				fun_dim=0,
+				n_head=8,
+				mlp_ratio=2, out_dim=3,
+				slice_num=32,
+				unified_pos=0
             )
         else:
             raise ValueError(f"Unsupported core model: {self.core_model_name}")
@@ -196,7 +207,7 @@ class Model(nn.Module):
 
 
     def forward(self, inputs, is_training):
-        if self.core_model_name == "regDGCNN_seg" or self.core_model_name == "regpointnet_seg":
+        if self.core_model_name == "regDGCNN_seg" or self.core_model_name == "regpointnet_seg" or self.core_model_name == "transolver":
             if is_training:
                 return self.learned_model(inputs) 
             else: 
@@ -241,7 +252,7 @@ class Model(nn.Module):
         self.learned_model = torch.load(path + "_learned_model.pth")
         self._output_normalizer = torch.load(path + "_output_normalizer.pth")
         self._node_dynamic_normalizer = torch.load(path + "_node_dynamic_normalizer.pth")
-        self._stress_output_normalizer = torch.load(path + "_stress_output_normalizer.pth")
+        # self._stress_output_normalizer = torch.load(path + "_stress_output_normalizer.pth")
         self._mesh_edge_normalizer = torch.load(path + "_mesh_edge_normalizer.pth")
         self._world_edge_normalizer = torch.load(path + "_world_edge_normalizer.pth")
         self._node_normalizer = torch.load(path + "_node_normalizer.pth")
