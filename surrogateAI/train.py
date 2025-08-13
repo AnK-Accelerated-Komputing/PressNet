@@ -79,6 +79,55 @@ def squeeze_data(data):
     transformed_data = {key: value.squeeze(0) for key, value in data.items()}
     return transformed_data
 
+def load_checkpoint(model, optimizer, scheduler, checkpoint_dir):
+    """Load model, optimizer, scheduler, and epoch from checkpoint."""
+
+    checkpoint_path = os.path.join(checkpoint_dir, "epoch_checkpoint.pth")
+    model_path = os.path.join(checkpoint_dir, "epoch_model_checkpoint_learned_model.pth")
+    optimizer_path = os.path.join(checkpoint_dir, "epoch_optimizer_checkpoint.pth")
+    scheduler_path = os.path.join(checkpoint_dir, "epoch_scheduler_checkpoint.pth")
+    loss_record_path = os.path.join(checkpoint_dir, "../log/temp_train_loss.pkl")
+
+    start_epoch = 0
+    epoch_training_losses = []
+    step_training_losses = []
+
+    if os.path.exists(checkpoint_path) and os.path.exists(model_path):
+        try:
+            epoch_model_checkpoint_path = os.path.join(checkpoint_dir,"epoch_model_checkpoint")
+            model.load_model(epoch_model_checkpoint_path)
+            print(f"Loaded model checkpoint")
+            
+            checkpoint = torch.load(checkpoint_path, map_location=device)
+            start_epoch = checkpoint['epoch'] + 1
+            print(f"Resuming from epoch {start_epoch}")
+
+            # model.load_state_dict(torch.load(model_path, map_location=device))
+            # print(f"Loaded model checkpoint from {model_path}")
+
+            if os.path.exists(optimizer_path):
+                optimizer.load_state_dict(torch.load(optimizer_path, map_location=device))
+                print(f"Loaded optimizer checkpoint from {optimizer_path}")
+
+            if os.path.exists(scheduler_path):
+                scheduler.load_state_dict(torch.load(scheduler_path, map_location=device))
+                print(f"Loaded scheduler checkpoint from {scheduler_path}")
+
+            if os.path.exists(loss_record_path):
+                loss_record = pickle_load(loss_record_path)
+                epoch_training_losses = loss_record.get('train_epoch_losses', [])
+                step_training_losses = loss_record.get('all_step_train_losses', [])
+                print(f"Loaded loss records from {loss_record_path}")
+
+        except Exception as e:
+            print(f"Error loading checkpoints: {e}. Starting from scratch.")
+            start_epoch = 0
+            epoch_training_losses = []
+            step_training_losses = []
+    else:
+        print("No checkpoints found. Starting from scratch.")
+
+    return start_epoch, epoch_training_losses, step_training_losses
 
 def main():
     device = torch.device('cuda')
