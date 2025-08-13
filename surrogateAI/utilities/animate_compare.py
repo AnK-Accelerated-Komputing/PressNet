@@ -62,8 +62,8 @@ def save_rollout_frames(rollout_data,save_directory,i=0,key="stress"):
         pred_y_displacement = abs((single_trajectory['pred_pos'][p].to('cpu')-single_trajectory['mesh_pos'][p].to('cpu'))[:,1].to('cpu'))
 
         node_type = single_trajectory['node_type'][p].to('cpu').flatten()
-        mask = (node_type != 0) | (node_type != 3)
-        mask_2 = (node_type == 0) | (node_type == 3)
+        mask = (node_type != 1) 
+        mask_2 = (node_type == 1)
 
         # pred_y_displacement = torch.clamp(pred_y_displacement, min=gt_y_displacement_min, max=gt_y_displacement_max)
         # print('shape of pred_y_displacement',pred_y_displacement.shape)
