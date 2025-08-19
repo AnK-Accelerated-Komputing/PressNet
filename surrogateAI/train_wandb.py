@@ -4,6 +4,8 @@ import pickle
 import time
 import datetime
 import gc
+import argparse
+import json
 
 import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -121,108 +123,137 @@ def load_checkpoint(model, optimizer, scheduler, checkpoint_dir):
     return start_epoch, epoch_training_losses, step_training_losses
 
 def main():
-    device = torch.device('cuda')
+    # Initialize argument parser
+    parser = argparse.ArgumentParser(description="Train a model with configurable parameters from a config file or command line")
+    parser.add_argument("--config", type=str, default="config.json",
+                        help="Path to JSON config file (default: config.json)")
+    
+    # Parse known args to get config file path
+    args, _ = parser.parse_known_args()
+
+    # Load config file
+    config = {}
+    try:
+        with open(args.config, 'r') as f:
+            config = json.load(f)
+        print(f"Loaded config from {args.config}")
+    except FileNotFoundError:
+        print(f"Config file {args.config} not found. Using default argument values.")
+    except json.JSONDecodeError:
+        print(f"Error parsing {args.config}. Using default argument values.")
+
+    # Define arguments with config file values as defaults (if available)
+    parser.add_argument("--train_data_path", type=str,
+                        default=config.get("train_data_path", "/home/ujwal/NEWPRESSNET/PressNet/Local/data/input/quarter_s_press_dataset.h5"),
+                        help="Path to the training dataset HDF5 file")
+    parser.add_argument("--output_dir", type=str,
+                        default=config.get("output_dir", "/home/ujwal/NEWPRESSNET/PressNet/Local/data/output"),
+                        help="Directory to store output files (checkpoints, logs, rollouts)")
+    parser.add_argument("--model_name", type=str,
+                        default=config.get("model_name", "gcn"), choices=["gcn", "encode_process_deocde","regDGCNN_seg","transolver"],
+                        help="Model type to use:")
+    parser.add_argument("--epochs", type=int,
+                        default=config.get("epochs", 1000),
+                        help="Number of training epochs")
+    parser.add_argument("--learning_rate", type=float,
+                        default=config.get("learning_rate", 0.0001),
+                        help="Learning rate for the optimizer")
+    parser.add_argument("--batch_size", type=int,
+                        default=config.get("batch_size", 1),
+                        help="Batch size for training and validation")
+    parser.add_argument("--scheduler_type", type=str,
+                        default=config.get("scheduler_type", "CosineAnnealingWarmRestarts"),
+                        choices=["CosineAnnealingWarmRestarts", "CosineAnnealingLR"],
+                        help="Type of learning rate scheduler")
+    parser.add_argument("--T_0", type=int,
+                        default=config.get("T_0", 50),
+                        help="Initial cycle length for CosineAnnealingWarmRestarts scheduler")
+    parser.add_argument("--T_mult", type=int,
+                        default=config.get("T_mult", 1),
+                        help="Cycle length multiplier for CosineAnnealingWarmRestarts scheduler")
+    parser.add_argument("--eta_min", type=float,
+                        default=config.get("eta_min", 0.000001),
+                        help="Minimum learning rate for scheduler")
+    parser.add_argument("--patience", type=int,
+                        default=config.get("patience", 100),
+                        help="Patience for early stopping")
+    parser.add_argument("--resume", action="store_true",
+                        default=config.get("resume", False),
+                        help="Resume training from existing checkpoint")
+    parser.add_argument("--checkpoint_dir", type=str,
+                        default=config.get("checkpoint_dir", None),
+                        help="Directory containing checkpoints to resume from (if --resume is set)")
+    parser.add_argument("--wandb_project", type=str,
+                        default=config.get("wandb_project", "Making Metric Same"),
+                        help="Wandb project name for logging")
+    parser.add_argument("--shuffle", action="store_true",
+                        default=config.get("shuffle", True),
+                        help="Shuffle the dataset during training")
+
+    args = parser.parse_args()
+
+    # Validate resume and checkpoint_dir
+    if args.resume and not args.checkpoint_dir:
+        parser.error("--checkpoint_dir is required when --resume is set")
 
     # Initialize Wandb
-    wandb.init(project="Early Stopping Checking", config={
-        "learning_rate": 0.001,
-        "epochs": 1000,
-        "batch_size": 1,
-        "model": "MeshGraphNet",
-        "dataset": "quarter s dataset: 400 step coarse",
-        # "message_passing_step": "3",
-        # "dropout": "0.4",
-        "scheduler": "CosineAnnealingWarmRestarts",  # Updated config
-        "T_0": 50,  # Initial cycle length
-        "T_mult": 1,  # Cycle length multiplier
-        "eta_min": 1e-6  # Minimum learning rate
+    wandb.init(project=args.wandb_project, config={
+        "learning_rate": args.learning_rate,
+        "epochs": args.epochs,
+        "batch_size": args.batch_size,
+        "model": args.model_name,
+        "dataset": args.train_data_path.split("/")[-1].split(".")[0],
+        "scheduler": args.scheduler_type,
+        "T_0": args.T_0,
+        "T_mult": args.T_mult,
+        "eta_min": args.eta_min,
+        "Shuffle": args.shuffle
     })
 
     start_epoch = 0
     start_time = time.time()
-    end_epoch = 1000
-    print(f"starting training from epoch {start_epoch} to {end_epoch}")
-    train_data_path = "/home/ujwal/NEWPRESSNET/PressNet/Local/data/input/quarter_s_press_dataset.h5"
-    output_dir = "/home/ujwal/NEWPRESSNET/PressNet/Local/data/output_model_eval"
-    train_dataset = TrajectoryDataset(train_data_path, split='train', stage=1)
-    val_dataset = TrajectoryDataset(train_data_path, split='val', stage=1)
-    # print(len(train_dataset),len(train_dataset)*3/399)
-    # print(train_dataset[0])
-    # print(len(val_dataset),len(val_dataset)*3/399)
-    # print(val_dataset[0])
+    end_epoch = args.epochs
+    print(f"Starting training from epoch {start_epoch} to {end_epoch}")
+    train_dataset = TrajectoryDataset(args.train_data_path, split='train', stage=1)
+    val_dataset = TrajectoryDataset(args.train_data_path, split='val', stage=1)
 
-    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=1, shuffle=True)
-    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=1, shuffle=True)
-
-
-
-    ####_____________NEED TO SELECT AMONG DIFFERENT MODELS IN FUTURE_____________##########
-    # model_num = 1
-    # '''
-    # if model 0: MGN
-    # if model 1: GCN
-    # '''
-    # if model_num == 0:
-    #     params = dict(field='world_pos', size=3, model=press_model, evaluator=press_eval)
-    #     model = press_model.Model(params)
-    # elif model_num == 1:
-    #     model = press_model_GCN.GCN(nfeat=9,nhid=64,output=3,dropout=0.2,edge_dim=4)
+    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=args.shuffle)
+    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=args.shuffle)
 
     params = dict(field='world_pos', size=3, model=press_model, evaluator=press_eval)
-    core_model = 'encode_process_decode'
-    model = press_model.Model(params,core_model_name=core_model)
+    model = press_model.Model(params, core_model_name=args.model_name)
     model = model.to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
 
-    # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-    #     optimizer,
-    #     T_max=50,  # Cycle length in epochs
-    #     eta_min=1e-6  # Minimum learning rate
-    # )
+    if args.scheduler_type == "CosineAnnealingWarmRestarts":
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+            optimizer,
+            T_0=args.T_0,
+            T_mult=args.T_mult,
+            eta_min=args.eta_min
+        )
+    elif args.scheduler_type == "CosineAnnealingLR":
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer,
+            T_max=args.T_0,
+            eta_min=args.eta_min
+        )
 
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
-        optimizer,
-        T_0=50,  # Initial cycle length in epochs
-        T_mult=1,  # Multiplier for cycle length after each restart
-        eta_min=1e-6  # Minimum learning rate
-    )
-
-    # scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, 0.1 + 1e-6, last_epoch=-1)
-
-    # scheduler = torch.optim.lr_scheduler.OneCycleLR(
-    #     optimizer,
-    #     max_lr=0.001,
-    #     total_steps=(end_epoch) * len(train_dataloader),
-    #     pct_start=0.3,
-    #     anneal_strategy='cos',
-    #     cycle_momentum=True,
-    #     base_momentum=0.85,
-    #     max_momentum=0.95,
-    #     div_factor=25.0,
-    #     final_div_factor=10000.0
-    # )
-    
-
-    resume_from_existing = False
-
-    if resume_from_existing:
-        checkpoint_dir = '/home/ujwal/NEWPRESSNET/PressNet/Local/data/output/encode_process_decode/Channel_U_press_dataset/Fri-Jul-25-11-07-32-2025/checkpoint'
-        log_dir = '/home/ujwal/NEWPRESSNET/PressNet/Local/data/output/encode_process_decode/Channel_U_press_dataset/Fri-Jul-25-11-07-32-2025/log'
-        rollout_dir = '/home/ujwal/NEWPRESSNET/PressNet/Local/data/output/encode_process_decode/Channel_U_press_dataset/Fri-Jul-25-11-07-32-2025/rollout'
-    else:   
-        checkpoint_dir, log_dir, rollout_dir = prepare_files_and_directories(output_dir, core_model, train_data_path)
+    if args.resume:
+        checkpoint_dir = args.checkpoint_dir
+        log_dir = os.path.join(checkpoint_dir, "../log")
+        rollout_dir = os.path.join(checkpoint_dir, "../rollout")
+    else:
+        checkpoint_dir, log_dir, rollout_dir = prepare_files_and_directories(args.output_dir, args.model_name, args.train_data_path)
     
     start_epoch, epoch_training_losses, step_training_losses = load_checkpoint(model, optimizer, scheduler, checkpoint_dir)
 
+    best_val_loss = float('inf')
+    patience = args.patience
+    patience_counter = 0
+    delta = 0.001
+    early_stop = False
     
-    # --- New: Early Stopping and Best Checkpoint Variables ---
-    best_val_loss = float('inf')  # Track best validation loss
-    patience = 100  # Number of epochs to wait for improvement
-    patience_counter = 0  # Counter for epochs without improvement
-    delta = 0.001  # Minimum improvement required to reset patience
-    early_stop = False  # Flag to stop training
-    
- 
     epoch_run_times = []
 
     for epoch in range(start_epoch, end_epoch):
