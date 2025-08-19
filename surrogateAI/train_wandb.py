@@ -234,32 +234,32 @@ def main():
         epoch_start_time = time.time()
 
         epoch_training_loss = 0.0
+        num_step = 0
 
-        print(" training")
+        print("Training")
         model.train()
         for data in train_dataloader:
             frame = squeeze_data_frame(data)
-            output = model(frame,is_training=True)
+            output = model(frame, is_training=True)
             loss = loss_fn(frame, output, model)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            # scheduler.step()
             step_training_losses.append(loss.detach().cpu())
             epoch_training_loss += loss.detach().cpu()
-
-            # Log step training loss to Wandb
+            num_step += 1
             wandb.log({"step_train_loss": loss.item()})
 
+        mean_epoch_training_loss = epoch_training_loss / num_step
         epoch_training_losses.append(epoch_training_loss)
-        print(f"epoch {epoch+1} training loss: {epoch_training_loss}, time taken: {time.time() - epoch_start_time}")
+        print(f"Epoch {epoch+1} training loss: {epoch_training_loss}, time taken: {time.time() - epoch_start_time}")
         print(f"[GPU] Allocated: {torch.cuda.memory_allocated() / 1e6:.2f} MB | "
-          f"Reserved: {torch.cuda.memory_reserved() / 1e6:.2f} MB")
+              f"Reserved: {torch.cuda.memory_reserved() / 1e6:.2f} MB")
         
-        # Log epoch training loss and learning rate to Wandb
         wandb.log({
             "epoch": epoch + 1,
             "epoch_train_loss": epoch_training_loss.item(),
+            "average_epoch_train_loss": mean_epoch_training_loss.item(),
             "learning_rate": scheduler.get_last_lr()[0]
         })
 
@@ -290,22 +290,37 @@ def main():
         trajectories = []
         mse_losses = []
         l1_losses = []
-        save_file = "rollout_epoch_" + str(epoch) + ".pkl"
+        masked_losses = []
+        save_file = f"rollout_epoch_{epoch}.pkl"
 
         mse_loss_fn = torch.nn.MSELoss()
         l1_loss_fn = torch.nn.L1Loss()
-        print(" evaluation")
+        print("Evaluation")
         model.eval()
         with torch.no_grad():
+            num_data = 0
+            masked_losses_sum = 0.0
             for data in val_loader:
-                data=squeeze_data(data)
+                data = squeeze_data(data)
                 _, prediction_trajectory = press_eval.evaluate(model, data)
                 mse_loss = mse_loss_fn(torch.squeeze(data['next_pos'].to(device), dim=0), prediction_trajectory['pred_pos'])
                 l1_loss = l1_loss_fn(torch.squeeze(data['next_pos'].to(device), dim=0), prediction_trajectory['pred_pos'])
                 mse_losses.append(mse_loss.cpu())
                 l1_losses.append(l1_loss.cpu())
                 trajectories.append(prediction_trajectory)
-        if epoch%50 == 0:
+
+                pred = prediction_trajectory['pred_pos']
+                target = torch.squeeze(data['next_pos'].to(device), dim=0)
+                squared_error = torch.sum((target - pred) ** 2, dim=1)
+                node_type = data['node_type'].to(device)
+                loss_mask = torch.eq(node_type[:, 0], torch.tensor([common.NodeType.NORMAL.value], device=device).int())
+                loss_mask = loss_mask.squeeze(1)
+                masked_loss = torch.mean(squared_error[loss_mask])
+                masked_losses_sum += masked_loss.item()
+                num_data += len(data["next_pos"])
+                
+        mean_masked_losses = masked_losses_sum / num_data
+        if epoch % 50 == 0:
             pickle_save(os.path.join(rollout_dir, save_file), trajectories)
 
         loss_record = {}
@@ -326,7 +341,8 @@ def main():
         wandb.log({
             "epoch": epoch + 1,
             "eval_mean_mse_loss": loss_record['eval_mean_mse_loss'],
-            "eval_mean_l1_loss": loss_record['eval_mean_l1_loss']
+            "eval_mean_l1_loss": loss_record['eval_mean_l1_loss'],
+            "mean_masked_loss": mean_masked_losses
         })
 
         current_val_loss = loss_record['eval_mean_l1_loss']
