@@ -10,16 +10,11 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 import numpy as np
 import wandb
 
-# from model import DGCNN, MagNet
 from utilities import press_eval, common
 from utilities.dataset import TrajectoryDataset
-
-# from surrogateAI.models import press_model
 from models import press_model
 
-
 device = torch.device('cuda')
-
 
 def squeeze_data_frame(data_frame):
     for k, v in data_frame.items():
@@ -51,23 +46,21 @@ def loss_fn(inputs, network_output, model):
     pos_prediction = network_output[:,:3]
 
     error = torch.sum((target_normalized - pos_prediction) ** 2, dim=1)
-    # loss = torch.mean(error)
     loss = torch.mean(error[loss_mask])
-    return  loss
+    return loss
 
-def prepare_files_and_directories(output_dir,model_num,train_data_path):
+def prepare_files_and_directories(output_dir, model_name, train_data_path):
     '''
-        The following code is about creating all the necessary files and directories for the run
+        Create necessary files and directories for the run
     '''
     train_data = train_data_path.split("/")[-1].split(".")[0]
-    output_dir = os.path.join(output_dir,str(model_num),train_data)
+    output_dir = os.path.join(output_dir, model_name, train_data)
     run_create_time = time.time()
     run_create_datetime = datetime.datetime.fromtimestamp(run_create_time).strftime('%c')
     run_create_datetime_datetime_dash = run_create_datetime.replace(" ", "-").replace(":", "-")
     run_dir = os.path.join(output_dir, run_create_datetime_datetime_dash)
     Path(run_dir).mkdir(parents=True, exist_ok=True)
 
-    # make all the necessary directories
     checkpoint_dir = os.path.join(run_dir, 'checkpoint')
     log_dir = os.path.join(run_dir, 'log')
     rollout_dir = os.path.join(run_dir, 'rollout')
@@ -83,7 +76,6 @@ def squeeze_data(data):
 
 def load_checkpoint(model, optimizer, scheduler, checkpoint_dir):
     """Load model, optimizer, scheduler, and epoch from checkpoint."""
-
     checkpoint_path = os.path.join(checkpoint_dir, "epoch_checkpoint.pth")
     model_path = os.path.join(checkpoint_dir, "epoch_model_checkpoint_learned_model.pth")
     optimizer_path = os.path.join(checkpoint_dir, "epoch_optimizer_checkpoint.pth")
@@ -96,16 +88,13 @@ def load_checkpoint(model, optimizer, scheduler, checkpoint_dir):
 
     if os.path.exists(checkpoint_path) and os.path.exists(model_path):
         try:
-            epoch_model_checkpoint_path = os.path.join(checkpoint_dir,"epoch_model_checkpoint")
+            epoch_model_checkpoint_path = os.path.join(checkpoint_dir, "epoch_model_checkpoint")
             model.load_model(epoch_model_checkpoint_path)
             print(f"Loaded model checkpoint")
             
             checkpoint = torch.load(checkpoint_path, map_location=device)
             start_epoch = checkpoint['epoch'] + 1
             print(f"Resuming from epoch {start_epoch}")
-
-            # model.load_state_dict(torch.load(model_path, map_location=device))
-            # print(f"Loaded model checkpoint from {model_path}")
 
             if os.path.exists(optimizer_path):
                 optimizer.load_state_dict(torch.load(optimizer_path, map_location=device))
@@ -241,8 +230,7 @@ def main():
             print(f"Early stopping triggered at epoch {epoch+1}")
             break
 
-
-        print(f"running epoch {epoch+1}")
+        print(f"Running epoch {epoch+1}")
         epoch_start_time = time.time()
 
         epoch_training_loss = 0.0
@@ -275,9 +263,7 @@ def main():
             "learning_rate": scheduler.get_last_lr()[0]
         })
 
-        #for cosine anneling 
         scheduler.step()
-
 
         loss_record = {}
         loss_record['train_total_loss'] = torch.sum(torch.stack(epoch_training_losses))
@@ -286,28 +272,21 @@ def main():
         loss_record['train_min_epoch_loss'] = torch.min(torch.stack(epoch_training_losses)).item()
         loss_record['train_epoch_losses'] = epoch_training_losses
         loss_record['all_step_train_losses'] = step_training_losses
-        # save train loss
 
-        if epoch%50 == 0:
+        if epoch % 50 == 0:
             temp_train_loss_pkl_file = os.path.join(log_dir, 'temp_train_loss.pkl')
             Path(temp_train_loss_pkl_file).touch()
             pickle_save(temp_train_loss_pkl_file, loss_record)
 
-        if epoch%250 == 0:
-            pickle_save(temp_train_loss_pkl_file.replace(".pkl",f'_{epoch}.pkl'), loss_record)
+        if epoch % 250 == 0:
+            pickle_save(temp_train_loss_pkl_file.replace(".pkl", f'_{epoch}.pkl'), loss_record)
 
-
-        if epoch%50 == 0:
-            model.save_model(os.path.join(checkpoint_dir,"epoch_model_checkpoint"))
-            torch.save(optimizer.state_dict(),os.path.join(checkpoint_dir,"epoch_optimizer_checkpoint" + ".pth"))
-            torch.save(scheduler.state_dict(),os.path.join(checkpoint_dir,"epoch_scheduler_checkpoint" + ".pth"))
+        if epoch % 50 == 0:
+            model.save_model(os.path.join(checkpoint_dir, "epoch_model_checkpoint"))
+            torch.save(optimizer.state_dict(), os.path.join(checkpoint_dir, "epoch_optimizer_checkpoint.pth"))
+            torch.save(scheduler.state_dict(), os.path.join(checkpoint_dir, "epoch_scheduler_checkpoint.pth"))
             torch.save({'epoch': epoch}, os.path.join(checkpoint_dir, "epoch_checkpoint.pth"))
         
-        # if epoch == 13:
-        #     scheduler.step()
-
-
-        # if epoch%2 == 0 or epoch == 0 or epoch == end_epoch-1: ##while using if condition please tab(move one tab backward) the subsequent codes
         trajectories = []
         mse_losses = []
         l1_losses = []
@@ -341,44 +320,30 @@ def main():
         loss_record['eval_mse_losses'] = mse_losses
         loss_record['eval_l1_losses'] = l1_losses
 
-        if epoch%50 == 0:
+        if epoch % 50 == 0:
             pickle_save(os.path.join(log_dir, f'eval_loss_epoch_{epoch}.pkl'), loss_record)
 
-        # Log evaluation losses to Wandb
         wandb.log({
             "epoch": epoch + 1,
             "eval_mean_mse_loss": loss_record['eval_mean_mse_loss'],
             "eval_mean_l1_loss": loss_record['eval_mean_l1_loss']
         })
 
-        # --- New: Best Checkpoint Saving ---
         current_val_loss = loss_record['eval_mean_l1_loss']
         if current_val_loss < best_val_loss - delta:
             print(f"New best validation loss: {current_val_loss:.6f} (previous: {best_val_loss:.6f})")
             best_val_loss = current_val_loss
-            patience_counter = 0  # Reset patience counter
-            # Save best checkpoint
-            # torch.save({
-            #     'epoch': epoch,
-            #     'model_state_dict': model.state_dict(),
-            #     'optimizer_state_dict': optimizer.state_dict(),
-            #     'scheduler_state_dict': scheduler.state_dict(),
-            #     'best_val_loss': best_val_loss
-            # }, os.path.join(checkpoint_dir, "best_checkpoint.pth"))
-            # model.save_model(os.path.join(checkpoint_dir, "best_model_checkpoint"))
-
-            model.save_model(os.path.join(checkpoint_dir,"best_model_checkpoint"))
-            torch.save(optimizer.state_dict(),os.path.join(checkpoint_dir,"best_optimizer_checkpoint" + ".pth"))
-            torch.save(scheduler.state_dict(),os.path.join(checkpoint_dir,"best_scheduler_checkpoint" + ".pth"))
+            patience_counter = 0
+            model.save_model(os.path.join(checkpoint_dir, "best_model_checkpoint"))
+            torch.save(optimizer.state_dict(), os.path.join(checkpoint_dir, "best_optimizer_checkpoint.pth"))
+            torch.save(scheduler.state_dict(), os.path.join(checkpoint_dir, "best_scheduler_checkpoint.pth"))
             torch.save({'epoch': epoch}, os.path.join(checkpoint_dir, "best_epoch_checkpoint.pth"))
             print(f"Saved best checkpoint at epoch {epoch+1}")
             pickle_save(os.path.join(rollout_dir, save_file), trajectories)
-
         else:
             patience_counter += 1
             print(f"No improvement in validation loss. Patience counter: {patience_counter}/{patience}")
 
-        # --- New: Early Stopping ---
         if patience_counter >= patience:
             print(f"Early stopping: No improvement in validation loss for {patience} epochs")
             early_stop = True
@@ -391,11 +356,7 @@ def main():
     torch.save(optimizer.state_dict(), os.path.join(checkpoint_dir, "optimizer_checkpoint.pth"))
     torch.save(scheduler.state_dict(), os.path.join(checkpoint_dir, "scheduler_checkpoint.pth"))
     
-
-    # Finish Wandb run
     wandb.finish()
-    
-    return
-    
+
 if __name__ == "__main__":
     main()
