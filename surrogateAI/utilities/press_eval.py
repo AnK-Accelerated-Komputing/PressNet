@@ -75,7 +75,7 @@ def evaluate(model, trajectory, num_steps=None):
     # trajectory_polygons = to_polygons(trajectory['cells'], trajectory['curr_pos'])
 
     traj_ops = {
-        # 'faces': trajectory['cells'],
+        'cells': trajectory['cells'],
         'faces': faces_result,
         'mesh_pos': trajectory['mesh_pos'],
         # 'gt_pos': trajectory_polygons,
