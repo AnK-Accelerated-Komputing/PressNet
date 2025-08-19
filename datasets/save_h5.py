@@ -11,7 +11,7 @@ def list_subfolders(directory):
 def save_multiple_trajectories_to_h5(raw_folder_path, output_folder_path, device):
     basename = os.path.basename(raw_folder_path)
     h5_path = os.path.join(output_folder_path, f"{basename}.h5")
-    meta_json_path = os.path.join(output_folder_path, f"{basename}.json")
+    meta_json_path = os.path.join(output_folder_path, f"{basename}_meta.json")
     with h5py.File(h5_path, 'w') as f:
 
         group_to_folder_map = {}  # Initialize dictionary for the mapping
@@ -21,19 +21,11 @@ def save_multiple_trajectories_to_h5(raw_folder_path, output_folder_path, device
         die_shape_folders = list_subfolders(raw_folder_path)
         for die_shape_folder in die_shape_folders:
             die_shape_folder_path = os.path.join(raw_folder_path, die_shape_folder)
-            # if not os.path.isdir(die_shape_folder_path):
-            #     print(f"Skipping non-directory: {die_shape_folder_path}")
-            #     continue
             print(f"Processing folder: {die_shape_folder}")
             data_folders = list_subfolders(die_shape_folder_path)
             for data_folder in data_folders:
                 print(f"Processing folder: {data_folder}")
                 data_folder_path = os.path.join(die_shape_folder_path, data_folder)
-                
-                # # Skip if it's not a directory
-                # if not os.path.isdir(data_folder_path):
-                #     print(f"Skipping non-directory: {data_folder_path}")
-                #     continue
                 
                 # Extract the trajectory
                 trajectory, time_step = generate_trajectory(data_folder_path, device)
