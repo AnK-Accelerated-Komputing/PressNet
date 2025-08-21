@@ -4,6 +4,7 @@ import json
 import h5py
 import os
 import numpy as np
+import random
 
 class TrajectoryDataset(Dataset):
     def __init__(self, data_path, split='train', stage=None):
@@ -36,6 +37,7 @@ class TrajectoryDataset(Dataset):
         final_data = []
         with h5py.File(self.data_path, 'r') as h5_file:
             group_names = list(h5_file.keys())
+            random.shuffle(group_names)
             total_groups = len(group_names)
             
             # 70% for train, 15% val, 15% test
