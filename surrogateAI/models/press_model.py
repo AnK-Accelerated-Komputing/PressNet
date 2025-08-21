@@ -138,7 +138,7 @@ class Model(nn.Module):
         one_hot_node_type = nn.functional.one_hot(node_type[:, 0].to(torch.int64), common.NodeType.SIZE).float()
 
         cells = inputs['cells'].to(device)
-        decomposed_cells = common.triangles_to_edges(cells, four_edge=self.four_edge, deform=True)
+        decomposed_cells = common.triangles_to_edges(cells, deform=True)
         senders, receivers = decomposed_cells['two_way_connectivity']
         # print(senders.shape, receivers.shape)
 
