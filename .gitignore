@@ -11,3 +11,4 @@ surrogateAI/wandb
 local
 /local
 surrogateAI/config.json
+datasets/data
