@@ -6,7 +6,7 @@ from torch import nn as nn
 # from torch import  as F
 
 from utilities import common
-from models import normalization, encode_process_decode, gcn, regDGCNN_seg, regpointnet_seg, transolver
+from models import normalization, encode_process_decode, gcn, regDGCNN_seg, regpointnet_seg, transolver, dilated_dgcnn
 
 import torch_scatter
 from torch_geometric.data import Data
@@ -29,7 +29,7 @@ class Model(nn.Module):
         self._world_edge_normalizer = normalization.Normalizer(size=4, name='world_edge_normalizer')
         self._model_type = params['model'].__name__
         self._displacement_base = None
-
+        # self.four_edge = params['four_edge']
         self.core_model_name = core_model_name
         if core_model_name == 'encode_process_decode':
             self.core_model = encode_process_decode
@@ -83,6 +83,17 @@ class Model(nn.Module):
 				slice_num=32,
 				unified_pos=0
             )
+        elif core_model_name == "dilated_dgcnn":
+            self.core_model = dilated_dgcnn
+            self.is_multigraph = False
+            self.learned_model = dilated_dgcnn.dilated_dgcnn(
+                output_size=params['size'],
+                input_dims=12,
+                k=params['k_neighbor'],
+                dilated_k=params['dilated_k_sample'],
+                emb_dims=1024,
+                dropout=0.1
+            )
         else:
             raise ValueError(f"Unsupported core model: {self.core_model_name}")
 
@@ -129,7 +140,7 @@ class Model(nn.Module):
         cells = inputs['cells'].to(device)
         decomposed_cells = common.triangles_to_edges(cells, deform=True)
         senders, receivers = decomposed_cells['two_way_connectivity']
-
+        # print(senders.shape, receivers.shape)
 
         # find world edge
         radius = 25
@@ -207,12 +218,12 @@ class Model(nn.Module):
 
 
     def forward(self, inputs, is_training):
-        if self.core_model_name == "regDGCNN_seg" or self.core_model_name == "regpointnet_seg" or self.core_model_name == "transolver":
+        if self.core_model_name == "regDGCNN_seg" or self.core_model_name == "dilated_dgcnn" or self.core_model_name == "regpointnet_seg" or self.core_model_name == "transolver":
             if is_training:
                 return self.learned_model(inputs) 
             else: 
                 return self._update(inputs, self.learned_model(inputs))
-        graph = self._build_graph(inputs, is_training=is_training,multigraph=self.is_multigraph)
+        graph = self._build_graph(inputs, is_training=is_training, multigraph=self.is_multigraph)
         if is_training:
             return self.learned_model(graph, is_training=is_training)
         else:
