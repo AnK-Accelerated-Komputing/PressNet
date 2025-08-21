@@ -220,7 +220,7 @@ def main():
     train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=args.shuffle)
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=args.shuffle)
 
-    params = dict(field='world_pos', size=3, model=press_model, evaluator=press_eval)
+    params = dict(field='world_pos', size=3, model=press_model, k_neighbor = 10, dilated_k_sample = 20, evaluator=press_eval)
     model = press_model.Model(params, core_model_name=args.model_name)
     model = model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
