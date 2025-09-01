@@ -6,6 +6,7 @@ import datetime
 import gc
 import argparse
 import json
+import shutil
 
 import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -189,6 +190,12 @@ def main():
     parser.add_argument("--shuffle", action="store_true",
                         default=config.get("shuffle", True),
                         help="Shuffle the dataset during training")
+    parser.add_argument("--stage", type=int,
+                        default=config.get("stage", 1),
+                        help="Stage value for TrajectoryDataset (default: 1)")
+    parser.add_argument("--delta", type=float,
+                        default=config.get("delta", 0.001),
+                        help="Minimum improvement in validation loss for early stopping (default: 0.001)")
 
     args = parser.parse_args()
 
@@ -207,15 +214,17 @@ def main():
         "T_0": args.T_0,
         "T_mult": args.T_mult,
         "eta_min": args.eta_min,
-        "Shuffle": args.shuffle
+        "Shuffle": args.shuffle,
+        "stage": args.stage,
+        "delta": args.delta
     })
 
     start_epoch = 0
     start_time = time.time()
     end_epoch = args.epochs
     print(f"Starting training from epoch {start_epoch} to {end_epoch}")
-    train_dataset = TrajectoryDataset(args.train_data_path, split='train', stage=1)
-    val_dataset = TrajectoryDataset(args.train_data_path, split='val', stage=1)
+    train_dataset = TrajectoryDataset(args.train_data_path, split='train', stage=args.stage)
+    val_dataset = TrajectoryDataset(args.train_data_path, split='val', stage=args.stage)
 
     train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=args.shuffle)
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=args.shuffle)
@@ -248,10 +257,20 @@ def main():
     
     start_epoch, epoch_training_losses, step_training_losses = load_checkpoint(model, optimizer, scheduler, checkpoint_dir)
 
+        # Copy config.json to log_dir
+    config_copy_path = os.path.join(log_dir, "config.json")
+    try:
+        shutil.copy2(args.config, config_copy_path)
+        print(f"Copied config file from {args.config} to {config_copy_path}")
+    except FileNotFoundError:
+        print(f"Error: Config file {args.config} not found. Skipping copy.")
+    except Exception as e:
+        print(f"Error copying config file to {config_copy_path}: {e}")
+
     best_val_loss = float('inf')
     patience = args.patience
     patience_counter = 0
-    delta = 0.001
+    delta = args.delta
     early_stop = False
     
     epoch_run_times = []
