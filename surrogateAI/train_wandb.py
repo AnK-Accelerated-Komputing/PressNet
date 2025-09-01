@@ -329,6 +329,33 @@ def main():
         print("Evaluation")
         model.eval()
         with torch.no_grad():
+            epoch_validation_loss = 0.0
+            num_step = 0
+            for data in val_loader:
+                data = squeeze_data_frame(data)
+                result_list = []
+                
+                for i in range(data['cells'].shape[0]):
+                    # Extract the i-th slice for each key and squeeze the first dimension
+                    result_list.append({
+                        'cells': data['cells'][i].squeeze(0),       # Shape [953, 4]
+                        'mesh_pos': data['mesh_pos'][i].squeeze(0), # Shape [446, 3]
+                        'node_type': data['node_type'][i].squeeze(0), # Shape [446, 1]
+                        'curr_pos': data['curr_pos'][i].squeeze(0), # Shape [446, 3]
+                        'next_pos': data['next_pos'][i].squeeze(0)  # Shape [446, 3]
+                    })
+            
+                
+                for step_input in result_list:
+                    frame = squeeze_data_frame(step_input)
+                    output = model(frame, is_training=True)
+                    loss = loss_fn(frame, output, model)
+                    epoch_validation_loss += loss.detach().cpu()
+                    num_step += 1
+
+            mean_epoch_validation_loss = epoch_validation_loss / num_step    
+ 
+        with torch.no_grad():
             num_data = 0
             masked_losses_sum = 0.0
             for data in val_loader:
@@ -373,7 +400,8 @@ def main():
             "epoch": epoch + 1,
             "eval_mean_mse_loss": loss_record['eval_mean_mse_loss'],
             "eval_mean_l1_loss": loss_record['eval_mean_l1_loss'],
-            "mean_masked_loss": mean_masked_losses
+            "mean_masked_loss": mean_masked_losses,
+            "mean_epoch_validation_loss": mean_epoch_validation_loss
         })
 
         current_val_loss = loss_record['eval_mean_l1_loss']
