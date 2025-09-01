@@ -12,3 +12,5 @@ local
 /local
 surrogateAI/config.json
 datasets/data
+datasets/data_gen_code
+

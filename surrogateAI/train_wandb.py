@@ -6,6 +6,7 @@ import datetime
 import gc
 import argparse
 import json
+import shutil
 
 import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -189,6 +190,12 @@ def main():
     parser.add_argument("--shuffle", action="store_true",
                         default=config.get("shuffle", True),
                         help="Shuffle the dataset during training")
+    parser.add_argument("--stage", type=int,
+                        default=config.get("stage", 1),
+                        help="Stage value for TrajectoryDataset (default: 1)")
+    parser.add_argument("--delta", type=float,
+                        default=config.get("delta", 0.001),
+                        help="Minimum improvement in validation loss for early stopping (default: 0.001)")
 
     args = parser.parse_args()
 
@@ -207,15 +214,17 @@ def main():
         "T_0": args.T_0,
         "T_mult": args.T_mult,
         "eta_min": args.eta_min,
-        "Shuffle": args.shuffle
+        "Shuffle": args.shuffle,
+        "stage": args.stage,
+        "delta": args.delta
     })
 
     start_epoch = 0
     start_time = time.time()
     end_epoch = args.epochs
     print(f"Starting training from epoch {start_epoch} to {end_epoch}")
-    train_dataset = TrajectoryDataset(args.train_data_path, split='train', stage=1)
-    val_dataset = TrajectoryDataset(args.train_data_path, split='val', stage=1)
+    train_dataset = TrajectoryDataset(args.train_data_path, split='train', stage=args.stage)
+    val_dataset = TrajectoryDataset(args.train_data_path, split='val', stage=args.stage)
 
     train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=args.shuffle)
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=args.shuffle)
@@ -248,10 +257,20 @@ def main():
     
     start_epoch, epoch_training_losses, step_training_losses = load_checkpoint(model, optimizer, scheduler, checkpoint_dir)
 
+        # Copy config.json to log_dir
+    config_copy_path = os.path.join(log_dir, "config.json")
+    try:
+        shutil.copy2(args.config, config_copy_path)
+        print(f"Copied config file from {args.config} to {config_copy_path}")
+    except FileNotFoundError:
+        print(f"Error: Config file {args.config} not found. Skipping copy.")
+    except Exception as e:
+        print(f"Error copying config file to {config_copy_path}: {e}")
+
     best_val_loss = float('inf')
     patience = args.patience
     patience_counter = 0
-    delta = 0.001
+    delta = args.delta
     early_stop = False
     
     epoch_run_times = []
@@ -329,6 +348,33 @@ def main():
         print("Evaluation")
         model.eval()
         with torch.no_grad():
+            epoch_validation_loss = 0.0
+            num_step = 0
+            for data in val_loader:
+                data = squeeze_data_frame(data)
+                result_list = []
+                
+                for i in range(data['cells'].shape[0]):
+                    # Extract the i-th slice for each key and squeeze the first dimension
+                    result_list.append({
+                        'cells': data['cells'][i].squeeze(0),       # Shape [953, 4]
+                        'mesh_pos': data['mesh_pos'][i].squeeze(0), # Shape [446, 3]
+                        'node_type': data['node_type'][i].squeeze(0), # Shape [446, 1]
+                        'curr_pos': data['curr_pos'][i].squeeze(0), # Shape [446, 3]
+                        'next_pos': data['next_pos'][i].squeeze(0)  # Shape [446, 3]
+                    })
+            
+                
+                for step_input in result_list:
+                    frame = squeeze_data_frame(step_input)
+                    output = model(frame, is_training=True)
+                    loss = loss_fn(frame, output, model)
+                    epoch_validation_loss += loss.detach().cpu()
+                    num_step += 1
+
+            mean_epoch_validation_loss = epoch_validation_loss / num_step    
+ 
+        with torch.no_grad():
             num_data = 0
             masked_losses_sum = 0.0
             for data in val_loader:
@@ -373,7 +419,8 @@ def main():
             "epoch": epoch + 1,
             "eval_mean_mse_loss": loss_record['eval_mean_mse_loss'],
             "eval_mean_l1_loss": loss_record['eval_mean_l1_loss'],
-            "mean_masked_loss": mean_masked_losses
+            "mean_masked_loss": mean_masked_losses,
+            "mean_epoch_validation_loss": mean_epoch_validation_loss
         })
 
         current_val_loss = loss_record['eval_mean_l1_loss']
