@@ -10,7 +10,7 @@ datasets/utilities/__pycache__
 surrogateAI/wandb
 local
 /local
-surrogateAI/config.json
+# surrogateAI/config.json
 datasets/data
 datasets/data_gen_code
 

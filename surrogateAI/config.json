@@ -1,0 +1,19 @@
+{
+  "train_data_path": "/home/ujwal/updated_pressnet/PressNet/datasets/data/input/merged_400_coarse_train_dataset.h5",
+  "output_dir": "/home/ujwal/updated_pressnet/PressNet/datasets/data/output",
+  "model_name": "regDGCNN_seg",
+  "epochs": 1000,
+  "learning_rate": 0.0001,
+  "batch_size": 1,
+  "scheduler_type": "CosineAnnealingWarmRestarts",
+  "T_0": 50,
+  "T_mult": 1,
+  "eta_min": 0.000001,
+  "patience": 100,
+  "resume": false,
+  "checkpoint_dir": null,
+  "wandb_project": "Merged_400_coarse_train",
+  "shuffle": true,
+  "stage": 1,
+  "delta": 0.0005
+}
