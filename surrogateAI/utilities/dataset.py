@@ -37,6 +37,7 @@ class TrajectoryDataset(Dataset):
         final_data = []
         with h5py.File(self.data_path, 'r') as h5_file:
             group_names = list(h5_file.keys())
+            random.seed(42)   # fixed seed for reproducibility
             random.shuffle(group_names)
             total_groups = len(group_names)
             
