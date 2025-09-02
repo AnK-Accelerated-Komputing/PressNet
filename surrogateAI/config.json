@@ -15,5 +15,5 @@
   "wandb_project": "Merged_400_coarse_train",
   "shuffle": true,
   "stage": 1,
-  "delta": 0.0005
+  "delta": 0.001
 }
