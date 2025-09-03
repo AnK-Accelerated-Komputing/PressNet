@@ -76,7 +76,7 @@ class TrajectoryDataset(Dataset):
                     end_step = 2 * (total_steps // 3)
                 elif self.stage == 3:
                     start_step = 2 * (total_steps // 3) + 1
-                    end_step = total_steps
+                    end_step = total_steps-2                # -2 is introduced so that end step is 399
                 else:
                     start_step = 1
                     end_step = total_steps
