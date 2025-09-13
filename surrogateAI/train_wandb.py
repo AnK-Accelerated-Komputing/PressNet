@@ -53,9 +53,9 @@ def loss_fn(inputs, network_output, model):
     pos_prediction = network_output[:,:3]
     stress_prediction = network_output[:,3:4]
 
-    error = torch.sum((target_normalized - pos_prediction) ** 2, dim=1)
-    error += torch.sum((target_stress_normalized - stress_prediction) ** 2, dim=1)
-    loss = torch.mean(error[loss_mask])
+    error_pos = torch.sum((target_normalized - pos_prediction) ** 2, dim=1)
+    error_stress = torch.sum((target_stress_normalized - stress_prediction) ** 2, dim=1)
+    loss = torch.mean(error_pos[loss_mask])+torch.mean(error_stress)
     return loss
 
 def prepare_files_and_directories(output_dir, model_name, train_data_path):
