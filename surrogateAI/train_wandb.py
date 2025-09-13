@@ -36,6 +36,7 @@ def loss_fn(inputs, network_output, model):
     """L2 loss on position."""
     world_pos = inputs['curr_pos'].to(device)
     target_world_pos = inputs['next_pos'].to(device)
+    target_stress = inputs['stress'].to(device)   ## need to check here
     
     cur_position = world_pos
     target_position = target_world_pos
@@ -43,12 +44,17 @@ def loss_fn(inputs, network_output, model):
 
     node_type = inputs['node_type'].to(device)
 
-    world_pos_normalizer = model.get_output_normalizer()
+    world_pos_normalizer, stress_normalizer = model.get_output_normalizer()
+    
     target_normalized = world_pos_normalizer(target_velocity)
+    target_stress_normalized = stress_normalizer(target_stress)
+
     loss_mask = torch.eq(node_type[:, 0], torch.tensor([common.NodeType.NORMAL.value], device=device).int())
     pos_prediction = network_output[:,:3]
+    stress_prediction = network_output[:,3:4]
 
     error = torch.sum((target_normalized - pos_prediction) ** 2, dim=1)
+    error += torch.sum((target_stress_normalized - stress_prediction) ** 2, dim=1)
     loss = torch.mean(error[loss_mask])
     return loss
 
@@ -229,7 +235,7 @@ def main():
     train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=args.shuffle)
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=args.shuffle)
 
-    params = dict(field='world_pos', size=3, model=press_model, k_neighbor = 10, dilated_k_sample = 20, evaluator=press_eval)
+    params = dict(field='world_pos', size=4, model=press_model, k_neighbor = 10, dilated_k_sample = 20, evaluator=press_eval)
     model = press_model.Model(params, core_model_name=args.model_name)
     model = model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
@@ -340,6 +346,8 @@ def main():
         trajectories = []
         mse_losses = []
         l1_losses = []
+        mse_losses_stress = []
+        l1_losses_stress = []
         masked_losses = []
         save_file = f"rollout_epoch_{epoch}.pkl"
 
@@ -361,7 +369,8 @@ def main():
                         'mesh_pos': data['mesh_pos'][i].squeeze(0), # Shape [446, 3]
                         'node_type': data['node_type'][i].squeeze(0), # Shape [446, 1]
                         'curr_pos': data['curr_pos'][i].squeeze(0), # Shape [446, 3]
-                        'next_pos': data['next_pos'][i].squeeze(0)  # Shape [446, 3]
+                        'next_pos': data['next_pos'][i].squeeze(0),  # Shape [446, 3]
+                        'next_stress': data['next_stress'][i].squeeze(0) # Shape [446, 1]
                     })
             
                 
@@ -380,10 +389,17 @@ def main():
             for data in val_loader:
                 data = squeeze_data(data)
                 _, prediction_trajectory = press_eval.evaluate(model, data)
-                mse_loss = mse_loss_fn(torch.squeeze(data['next_pos'].to(device), dim=0), prediction_trajectory['pred_pos'])
-                l1_loss = l1_loss_fn(torch.squeeze(data['next_pos'].to(device), dim=0), prediction_trajectory['pred_pos'])
-                mse_losses.append(mse_loss.cpu())
-                l1_losses.append(l1_loss.cpu())
+                ## right now stress is not considered here , can add code later
+                mse_loss_pos = mse_loss_fn(torch.squeeze(data['next_pos'].to(device), dim=0), prediction_trajectory['pred_pos'])
+                l1_loss_pos = l1_loss_fn(torch.squeeze(data['next_pos'].to(device), dim=0), prediction_trajectory['pred_pos'])
+                mse_loss_stress = mse_loss_fn(torch.squeeze(data['next_stress'].to(device), dim=0), prediction_trajectory['pred_stress'])
+                l1_loss_stress = l1_loss_fn(torch.squeeze(data['next_stress'].to(device), dim=0), prediction_trajectory['pred_stress'])
+                
+                mse_losses.append(mse_loss_pos.cpu())
+                l1_losses.append(l1_loss_pos.cpu())
+                mse_losses_stress.append(mse_loss_stress.cpu())
+                l1_losses_stress.append(l1_loss_stress.cpu())
+
                 trajectories.append(prediction_trajectory)
 
                 pred = prediction_trajectory['pred_pos']
@@ -409,8 +425,18 @@ def main():
         loss_record['eval_mean_l1_loss'] = torch.mean(torch.stack(l1_losses)).item()
         loss_record['eval_max_l1_loss'] = torch.max(torch.stack(l1_losses)).item()
         loss_record['eval_min_l1_loss'] = torch.min(torch.stack(l1_losses)).item()
-        loss_record['eval_mse_losses'] = mse_losses
-        loss_record['eval_l1_losses'] = l1_losses
+        loss_record['eval_mse_losses_pos'] = mse_losses
+        loss_record['eval_l1_losses_pos'] = l1_losses
+        loss_record['eval_total_mse_loss_stress'] = torch.sum(torch.stack(mse_losses_stress)).item()
+        loss_record['eval_total_l1_loss_stress'] = torch.sum(torch.stack(l1_losses_stress)).item()
+        loss_record['eval_mean_mse_loss_stress'] = torch.mean(torch.stack(mse_losses_stress)).item()
+        loss_record['eval_max_mse_loss_stress'] = torch.max(torch.stack(mse_losses_stress)).item()
+        loss_record['eval_min_mse_loss_stress'] = torch.min(torch.stack(mse_losses_stress)).item()
+        loss_record['eval_mean_l1_loss_stress'] = torch.mean(torch.stack(l1_losses_stress)).item()
+        loss_record['eval_max_l1_loss_stress'] = torch.max(torch.stack(l1_losses_stress)).item()
+        loss_record['eval_min_l1_loss_stress'] = torch.min(torch.stack(l1_losses_stress)).item()
+        loss_record['eval_mse_losses_stress'] = mse_losses_stress
+        loss_record['eval_l1_losses_stress'] = l1_losses_stress
 
         if epoch % 50 == 0:
             pickle_save(os.path.join(log_dir, f'eval_loss_epoch_{epoch}.pkl'), loss_record)

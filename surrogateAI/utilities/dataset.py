@@ -100,6 +100,7 @@ class TrajectoryDataset(Dataset):
                             if next_step_key in group:
                                 next_step_group = group[next_step_key]
                                 next_pos = torch.tensor(next_step_group['world_pos'][:])
+                                next_stress = torch.tensor(next_step_group['stress'][:])
                             else:
                                 next_pos = None
 
@@ -108,13 +109,15 @@ class TrajectoryDataset(Dataset):
                                 'mesh_pos': mesh_pos,
                                 'node_type': node_type,
                                 'curr_pos': curr_pos,
-                                'next_pos': next_pos
+                                'next_pos': next_pos,
+                                'next_stress': next_stress
                             }
                             final_data.append(step_data)
                 else:
                     # For val/test, accumulate the data in lists
                     curr_pos_list = []
                     next_pos_list = []
+                    next_stress_list = []
 
                     for step_num in range(start_step, end_step + 1):
                         step_key = f'step_{step_num}'
@@ -127,17 +130,20 @@ class TrajectoryDataset(Dataset):
                         if next_step_key in group:
                             next_step_group = group[next_step_key]
                             next_pos_list.append(torch.tensor(next_step_group['world_pos'][:]))
+                            next_stress_list.append(torch.tensor(next_step_group['stress'][:]))
 
                     # Convert lists to tensors
                     curr_pos_tensor = torch.stack(curr_pos_list) if curr_pos_list else torch.empty(0)
                     next_pos_tensor = torch.stack(next_pos_list) if next_pos_list else torch.empty(0)
+                    next_stress_tensor = torch.stack(next_stress_list) if next_stress_list else torch.empty(0)
 
                     grouped_data = {
                         'cells': cells.expand(curr_pos_tensor.size(0), -1, -1),  # (steps, num_cells, 3)
                         'mesh_pos': mesh_pos.expand(curr_pos_tensor.size(0), -1, -1),  # (steps, num_nodes, 3)
                         'node_type': node_type.expand(curr_pos_tensor.size(0),-1, -1),  # (steps, num_nodes,1)
                         'curr_pos': curr_pos_tensor,
-                        'next_pos': next_pos_tensor
+                        'next_pos': next_pos_tensor,
+                        'next_stress': next_stress_tensor
                     }
 
                     final_data.append(grouped_data)
