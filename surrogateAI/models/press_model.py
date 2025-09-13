@@ -23,6 +23,7 @@ class Model(nn.Module):
         super(Model, self).__init__()
         self._params = params
         self._output_normalizer = normalization.Normalizer(size=3, name='output_normalizer')
+        self._stress_output_normalizer = normalization.Normalizer(size=1, name='stress_output_normalizer')
         self._node_normalizer = normalization.Normalizer(size=4, name='node_normalizer')
         self._node_dynamic_normalizer = normalization.Normalizer(size=1, name='node_dynamic_normalizer')
         self._mesh_edge_normalizer = normalization.Normalizer(size=8, name='mesh_edge_normalizer')
@@ -236,8 +237,8 @@ class Model(nn.Module):
         velocity = self._output_normalizer.inverse(torch.where(output_mask, per_node_network_output, torch.tensor(0., device=device)))'''
         # print("per node network output shape",per_node_network_output.shape)
         velocity = self._output_normalizer.inverse(per_node_network_output[:, :3])
+        stress = self._stress_output_normalizer.inverse(per_node_network_output[:, 3:4])
 
-        node_type = inputs['node_type']
         '''scripted_node_mask = torch.eq(node_type[:, 0], torch.tensor([common.NodeType.OBSTACLE.value], device=device))
         scripted_node_mask = torch.stack([scripted_node_mask] * 3, dim=1)'''
 
@@ -245,10 +246,10 @@ class Model(nn.Module):
         cur_position = inputs['curr_pos']
         position = cur_position + velocity
         # position = torch.where(scripted_node_mask, position + inputs['target|world_pos'] - inputs['world_pos'], position)
-        return (position, cur_position, velocity)
+        return (position, cur_position, velocity,stress)
 
     def get_output_normalizer(self):
-        return (self._output_normalizer)
+        return (self._output_normalizer,self._stress_output_normalizer)
 
     def save_model(self, path):
         torch.save(self.learned_model, path + "_learned_model.pth")

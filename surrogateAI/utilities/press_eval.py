@@ -17,33 +17,36 @@ def _rollout(model, initial_state, num_steps, target_world_pos):
     obstacle_mask = torch.eq(node_type[:, 0], torch.tensor([common.NodeType.OBSTACLE.value], device=device))
     obstacle_mask = torch.stack((obstacle_mask, obstacle_mask, obstacle_mask), dim=1)
 
-    def step_fn(cur_pos, trajectory, cur_positions, cur_velocities, target_world_pos):
+    def step_fn(cur_pos, trajectory,stress_trajectory, cur_positions, cur_velocities, target_world_pos):
         # memory_prev = torch.cuda.memory_allocated(device) / (1024 * 1024)
         with torch.no_grad():
-            prediction, cur_position, cur_velocity = model({**initial_state, 'curr_pos': cur_pos, 'next_pos': target_world_pos}, is_training=False)
+            pos_prediction, cur_position, cur_velocity, stress_prediction = model({**initial_state, 'curr_pos': cur_pos, 'next_pos': target_world_pos}, is_training=False)
 
-        next_pos = torch.where(mask, prediction, target_world_pos)
+        next_pos = torch.where(mask, pos_prediction, target_world_pos)
 
 
         trajectory.append(next_pos)
+        stress_trajectory.append(stress_prediction)
         cur_positions.append(cur_position)
         cur_velocities.append(cur_velocity)
-        return next_pos, trajectory, cur_positions, cur_velocities
+
+        return next_pos, trajectory, stress_trajectory, cur_positions, cur_velocities
 
     cur_pos = torch.squeeze(initial_state['curr_pos'].to(device), 0)
     trajectory = []
+    stress_trajectory = []
     cur_positions = []
     cur_velocities = []
     for step in range(num_steps):
-        cur_pos, trajectory, cur_positions, cur_velocities = step_fn(cur_pos, trajectory, cur_positions, cur_velocities, target_world_pos[step])
-    return (torch.stack(trajectory), torch.stack(cur_positions), torch.stack(cur_velocities))
+        cur_pos, trajectory, stress_trajectory, cur_positions, cur_velocities = step_fn(cur_pos, trajectory,stress_trajectory, cur_positions, cur_velocities, target_world_pos[step])
+    return (torch.stack(trajectory), torch.stack(cur_positions), torch.stack(cur_velocities)), torch.stack(stress_trajectory)
 
 def evaluate(model, trajectory, num_steps=None):
     """Performs model rollouts and create stats."""
     initial_state = {k: torch.squeeze(v, 0)[0] for k, v in trajectory.items()}
     if num_steps is None:
         num_steps = trajectory['mesh_pos'].squeeze(0).shape[0]
-    prediction, cur_positions, cur_velocities = _rollout(model, initial_state, num_steps, trajectory['next_pos'].squeeze(0).to(device))
+    prediction, cur_positions, cur_velocities, stress = _rollout(model, initial_state, num_steps, trajectory['next_pos'].squeeze(0).to(device))
 
 
     scalars = None
@@ -70,6 +73,8 @@ def evaluate(model, trajectory, num_steps=None):
         'pred_pos': prediction,
         'cur_positions': cur_positions,
         'cur_velocities': cur_velocities,
+        'gt_stress': trajectory['next_stress'],
+        'pred_stress': stress,
         'node_type': trajectory['node_type']
     }
     return scalars, traj_ops
