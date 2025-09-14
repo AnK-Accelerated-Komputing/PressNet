@@ -36,7 +36,7 @@ def loss_fn(inputs, network_output, model):
     """L2 loss on position."""
     world_pos = inputs['curr_pos'].to(device)
     target_world_pos = inputs['next_pos'].to(device)
-    target_stress = inputs['stress'].to(device)   ## need to check here
+    target_stress = inputs['next_stress'].to(device)   ## need to check here
     
     cur_position = world_pos
     target_position = target_world_pos
