@@ -39,7 +39,7 @@ def _rollout(model, initial_state, num_steps, target_world_pos):
     cur_velocities = []
     for step in range(num_steps):
         cur_pos, trajectory, stress_trajectory, cur_positions, cur_velocities = step_fn(cur_pos, trajectory,stress_trajectory, cur_positions, cur_velocities, target_world_pos[step])
-    return (torch.stack(trajectory), torch.stack(cur_positions), torch.stack(cur_velocities)), torch.stack(stress_trajectory)
+    return (torch.stack(trajectory), torch.stack(cur_positions), torch.stack(cur_velocities), torch.stack(stress_trajectory))
 
 def evaluate(model, trajectory, num_steps=None):
     """Performs model rollouts and create stats."""
