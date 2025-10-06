@@ -27,4 +27,18 @@ For proof of concept we have trained for the die shapes using graph network arch
 ![Deformation Inference Result 2](docs/images/rollout_1_r25_ml16_del400_fps15.gif)
 *Figure: Inference result of the simulation with deformation seen visually and vertical deformation as contour plot*
 
-
+## Citation
+If you use this dataset in your work, please consider citing the following publications.
+```
+@inproceedings{PRESSNET2025,
+  author    = {Prince Panta and Saroj Belbase and Rachit Rijal and Bipin Shrestha and Nirmal Prasad Panta and Dikshya Parajuli and Rujal Acharya and Saugat Kafley and Amit Regmi and Ken Igeta and Akio Tanaka and Christopher McComb},
+  title     = {{PRESSNET: A Forming Dataset for Structural Simulation in Pressed Blanks with Deep Learning Benchmarks}},
+  booktitle = {Proceedings of the ASME 2025 International Design Engineering Technical Conferences
+               and Computers and Information in Engineering Conference (IDETC/CIE 2025)},
+  year      = {2025},
+  address   = {Anaheim, CA, USA},
+  paperid   = {IDETC2025-163821},
+  publisher = {American Society of Mechanical Engineers (ASME)},
+  note      = {DOI to be assigned}
+}
+```
