@@ -233,7 +233,7 @@ def main():
     val_dataset = TrajectoryDataset(args.train_data_path, split='val', stage=args.stage)
 
     train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=args.shuffle)
-    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=args.shuffle)
+    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle= False)
 
     params = dict(field='world_pos', size=4, model=press_model, k_neighbor = 10, dilated_k_sample = 20, evaluator=press_eval)
     model = press_model.Model(params, core_model_name=args.model_name)
@@ -466,7 +466,7 @@ def main():
 
         if patience_counter >= patience:
             print(f"Early stopping: No improvement in validation loss for {patience} epochs")
-            early_stop = True
+            early_stop = False
 
         epoch_run_times.append(time.time() - epoch_start_time)
         pickle_save(os.path.join(log_dir, 'epoch_run_times_upto_epoch.pkl'), epoch_run_times)
