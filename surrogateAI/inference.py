@@ -30,6 +30,10 @@ PARAMETERS = {
     )
 }
 
+def squeeze_data_frame(data_frame):
+    for k, v in data_frame.items():
+        data_frame[k] = torch.squeeze(v, 0)
+    return data_frame
 
 def save_rollout(rollout_path, trajectories, disp=""):
     """Save predicted trajectories to a pickle file."""
@@ -56,7 +60,7 @@ def load_model(inference_config, params, checkpoint_dir):
 def get_meta_data(data_path):
     """Load metadata JSON corresponding to the dataset."""
     base_folder = os.path.dirname(data_path)
-    data_name = os.path.basename(data_path).split('.')[0]
+    data_name = os.path.basename(data_path).split('.')[0].replace('_press_dataset','')
     meta_file = os.path.join(base_folder, f'{data_name}_meta.json')
 
     with open(meta_file, 'r') as f:
@@ -100,6 +104,8 @@ def inference(checkpoint_dir, val_dir, rollout_dir):
         
         start_time = time.time()
         _, prediction_trajectory = press_eval.evaluate(model, data)
+        prediction_trajectory = squeeze_data_frame(prediction_trajectory)
+        print(prediction_trajectory['cells'].shape)
         trajectories.append(prediction_trajectory)
         end_time = time.time()
 
