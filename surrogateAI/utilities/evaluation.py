@@ -14,6 +14,11 @@ def load_pkl_file(file_path):
         data = pickle.load(f)
     return data
 
+def squeeze_data_frame(data_frame):
+    for k, v in data_frame.items():
+        data_frame[k] = torch.squeeze(v, 0)
+    return data_frame
+
 def obtain_step_loss(single_trajectory,loss='rmse'):
     step_loss = {
         # 'stress' : [],
@@ -308,6 +313,7 @@ def evaluate_rollout(rollout_pth, base_output_dir,plot=True):
     for i in range(len(rollout)):
         start_time = time.time()
         single_trajectory = rollout[i]
+        single_trajectory = squeeze_data_frame(single_trajectory )
         output_dir = os.path.join(base_output_dir,str(i))
         os.makedirs(output_dir, exist_ok=True)
         print(f"working on the trajectory {i}")
