@@ -43,20 +43,42 @@ class TrajectoryDataset(Dataset):
             
             # 70% for train, 15% val, 15% test
             if self.split == 'train':
-                group_limit = round(total_groups * 0.7)
-                selected_groups = group_names[:group_limit]
+                # group_limit = round(total_groups * 0.7)
+                # print("Ujwal_selected_group_limit",group_limit)
+                # selected_groups = group_names[:group_limit]
+                selected_groups = [
+                            f"group_{i}"
+                            for i in range(0, total_groups)
+                            if str(i)[-1] in ("0", "1", "2", "4", "5", "6", "8")
+                        ]
+
+                print("Ujwal_selected_group_for_training",selected_groups)
             elif self.split == 'val':
-                group_limit_start = round(total_groups * 0.7)
-                group_limit_end = round(total_groups * 0.9)
-                if group_limit_end == group_limit_start:
-                    selected_groups = group_names[group_limit_start:]
-                else:
-                    selected_groups = group_names[group_limit_start:group_limit_end]
+                # group_limit_start = round(total_groups * 0.7)
+                # group_limit_end = round(total_groups * 0.9)
+                # if group_limit_end == group_limit_start:
+                #     selected_groups = group_names[group_limit_start:]
+                # else:
+                    # selected_groups = group_names[group_limit_start:group_limit_end]
+                
+                    selected_groups = [
+                                f"group_{i}"
+                                for i in range(0, total_groups)
+                                if str(i)[-1] in ("3", "7")
+                            ]
+                    print("Ujwal_selected_group_for_validation",selected_groups)
+
             else:  # test
-                group_limit_start = round(total_groups * 0.9)
-                if group_limit_start == total_groups:
-                    group_limit_start -= 1
-                selected_groups = group_names[group_limit_start:]
+                # group_limit_start = round(total_groups * 0.9)
+                # if group_limit_start == total_groups:
+                #     group_limit_start -= 1
+                # selected_groups = group_names[group_limit_start:]
+                    selected_groups = [
+                                f"group_{i}"
+                                for i in range(0, total_groups)
+                                if str(i)[-1] in ("9")
+                            ]
+
             print(f"selected groups: {selected_groups}")
             for group_name in selected_groups:
                 print(f"processing {group_name}")
