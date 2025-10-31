@@ -39,6 +39,7 @@ If you use this dataset in your work, please consider citing the following publi
   address   = {Anaheim, CA, USA},
   paperid   = {IDETC2025-163821},
   publisher = {American Society of Mechanical Engineers (ASME)},
-  note      = {DOI to be assigned}
+  doi       = {10.1115/DETC2025-163821},
+  url       = {https://doi.org/10.1115/DETC2025-163821}
 }
 ```
