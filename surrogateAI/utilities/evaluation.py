@@ -48,14 +48,14 @@ def obtain_step_loss(single_trajectory,loss='rmse'):
         # pred['stress'].append(torch.mean(pred_stress))
         # pred['max_stress'].append(torch.max(pred_stress))
 
-        gt_pos = single_trajectory['gt_pos'][i].to('cpu')[mask]
+        gt_pos = single_trajectory['gt_pos'][i].to('cpu')[mask]   ## cannot understand whether this works or not 
         pred_pos = single_trajectory['pred_pos'][i].to('cpu')[mask]
         mesh_pos = single_trajectory['mesh_pos'][i].to('cpu')[mask]
 
         gt_y_deform = torch.abs((gt_pos-mesh_pos)[:,1].flatten())
         pred_y_deform = torch.abs((pred_pos-mesh_pos)[:,1].flatten())
         
-        if i == 99 or i == 199:
+        if i == 99 or i == 199: # why this condition? what is this trying to do?
             gt["deform_y"].append(gt["deform_y"][-1])
             gt["max_deform_y"].append(gt["max_deform_y"][-1])
         else:
@@ -72,7 +72,7 @@ def obtain_step_loss(single_trajectory,loss='rmse'):
             
             loss_y_deform = torch.sqrt(torch.mean((gt_y_deform - pred_y_deform) ** 2))
             loss_y_deform_max = torch.sqrt((torch.max(gt_y_deform) - torch.max(pred_y_deform))**2)
-        if i == 99 or i == 198:
+        if i == 99 or i == 198: # why this condition? 
             step_loss["deform_y"].append(step_loss["deform_y"][-1])
             step_loss["max_deform_y"].append(step_loss["max_deform_y"][-1])
         else:
@@ -208,16 +208,16 @@ def plot_domain_wise_loss(x_ranges,results, output_dir,key='all'):
     # print(len(results['range']))
     x_range_labels = [(results['range'][p][0]+results['range'][p][1])/2 for p in range(len(results['range']))]
     if key == 'all':
-        keys = ['stress','max_stress']
+        keys = ['deform_y','max_deform_y']
     else:
         keys = [key]
     
     for key in keys:
-        if key == 'stress':
+        if key == 'deform_y':
             errors = results['rmse']
             stress_gt = results['gt']
             stress_pred = results['pred']
-        if key == 'max_stress':
+        if key == 'max_deform_y':
             errors = results['max_rmse']
             stress_gt = results['max_gt']
             stress_pred = results['max_pred']
@@ -321,10 +321,10 @@ def evaluate_rollout(rollout_pth, base_output_dir,plot=True):
         average_deformation_error.append(step_y_loss_avg)
         max_deformation_error.append(step_y_loss_max)
         # Save the list to a .pkl file
-        with open('/home/ujwal/NEWPRESSNET/PressNet/Local/data/output/transolver/quarter_s_press_dataset/Tue-Jul-29-12-53-43-2025/rollout/rollout_evaluation_transolver_400_coarse/Average_deformation_error.pkl', 'wb') as file:
+        with open(r"J:\Files\03_Work\10_AnK\3_PressNetData\Input\Channel_U_press_dataset\Mon-Nov-24-17-49-54-2025\rollout\rollout_evaluation_transolver_400_coarse\Average_deformation_error.pkl", 'wb') as file:
             pickle.dump(average_deformation_error, file)
 
-        with open('//home/ujwal/NEWPRESSNET/PressNet/Local/data/output/transolver/quarter_s_press_dataset/Tue-Jul-29-12-53-43-2025/rollout/rollout_evaluation_transolver_400_coarse/Max_deformation_error.pkl', 'wb') as file:
+        with open(r"J:\Files\03_Work\10_AnK\3_PressNetData\Input\Channel_U_press_dataset\Mon-Nov-24-17-49-54-2025\rollout\rollout_evaluation_transolver_400_coarse\Max_deformation_error.pkl", 'wb') as file:
             pickle.dump(max_deformation_error, file)
 
         print("step loss:","y_avg",step_y_loss_avg,"y_max",step_y_loss_max) #"stress_avg",step_stress_loss_avg,"stress_max",step_stress_loss_max,
@@ -348,7 +348,7 @@ def evaluate_rollout(rollout_pth, base_output_dir,plot=True):
             'step_y_deform_loss_max':step_y_loss_max.item(),
             'domain_stress_loss_avg':domain_stress_loss_avg.item(),
             'domain_stress_loss_max':domain_stress_loss_max.item()
-            }
+            }  ## Reached up this here. 
         json_file_path = os.path.join(os.path.dirname(base_output_dir),'rollout_info.json')
         try:
             print(json_file_path)
@@ -375,8 +375,8 @@ def evaluate_rollout(rollout_pth, base_output_dir,plot=True):
     return
 
 def main():
-    base_dir = "/home/ujwal/NEWPRESSNET/PressNet/Local/data/output/transolver/quarter_s_press_dataset/Tue-Jul-29-12-53-43-2025/rollout"
-    rollout_pth = os.path.join(base_dir,'rollout_epoch_999.pkl')
+    base_dir = r"J:\Files\03_Work\10_AnK\3_PressNetData\Input\Channel_U_press_dataset\Mon-Nov-24-17-49-54-2025\rollout"
+    rollout_pth = os.path.join(base_dir,'rollout_epoch_3.pkl')
     output_dir = os.path.join(base_dir,'rollout_evaluation_transolver_400_coarse')
     evaluate_rollout(rollout_pth, output_dir,plot=True)
 

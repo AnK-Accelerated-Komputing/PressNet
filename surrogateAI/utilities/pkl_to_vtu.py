@@ -119,8 +119,8 @@ def process_samples(data_path, base_output_dir):
 
 
 def main():
-    data_path = "/home/bipinshrestha228/PressNet/conference_paper/gcn_merged_400_abs/infer_rollout.pkl"
-    base_output_dir = "/home/bipinshrestha228/PressNet/vtu_testing"
+    data_path = r"J:\Files\03_Work\10_AnK\3_PressNetData\Output\infer_rollout.pkl"
+    base_output_dir = r"J:\Files\03_Work\10_AnK\3_PressNetData\Output\vtu"
     process_samples(data_path, base_output_dir)
 
 if __name__ == "__main__":

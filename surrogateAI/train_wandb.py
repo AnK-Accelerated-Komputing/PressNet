@@ -101,16 +101,16 @@ def load_checkpoint(model, optimizer, scheduler, checkpoint_dir):
             model.load_model(epoch_model_checkpoint_path)
             print(f"Loaded model checkpoint")
             
-            checkpoint = torch.load(checkpoint_path, map_location=device)
+            checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
             start_epoch = checkpoint['epoch'] + 1
             print(f"Resuming from epoch {start_epoch}")
 
             if os.path.exists(optimizer_path):
-                optimizer.load_state_dict(torch.load(optimizer_path, map_location=device))
+                optimizer.load_state_dict(torch.load(optimizer_path, map_location=device, weights_only=False))
                 print(f"Loaded optimizer checkpoint from {optimizer_path}")
 
             if os.path.exists(scheduler_path):
-                scheduler.load_state_dict(torch.load(scheduler_path, map_location=device))
+                scheduler.load_state_dict(torch.load(scheduler_path, map_location=device, weights_only=False))
                 print(f"Loaded scheduler checkpoint from {scheduler_path}")
 
             if os.path.exists(loss_record_path):
@@ -150,14 +150,15 @@ def main():
         print(f"Error parsing {args.config}. Using default argument values.")
 
     # Define arguments with config file values as defaults (if available)
-    parser.add_argument("--train_data_path", type=str,
-                        default=config.get("train_data_path", "/home/ujwal/NEWPRESSNET/PressNet/Local/data/input/quarter_s_press_dataset.h5"),
-                        help="Path to the training dataset HDF5 file")
+    # CHANGED: train_data_path -> train_val_data_path to match new file structure
+    parser.add_argument("--train_val_data_path", type=str,
+                        default=config.get("train_val_data_path", "/home/ank-server5/ANK/PressNet/datasets/data/coarse_1500_train_val.h5"),
+                        help="Path to the training/validation dataset HDF5 file")
     parser.add_argument("--output_dir", type=str,
-                        default=config.get("output_dir", "/home/ujwal/NEWPRESSNET/PressNet/Local/data/output"),
+                        default=config.get("output_dir", "/home/ank-server5/ANK/PressNet/datasets/output"),
                         help="Directory to store output files (checkpoints, logs, rollouts)")
     parser.add_argument("--model_name", type=str,
-                        default=config.get("model_name", "gcn"), choices=["gcn", "encode_process_deocde","regDGCNN_seg","transolver"],
+                        default=config.get("model_name", "gcn"), choices=["gcn", "encode_process_decode","regDGCNN_seg","transolver","dilated_dgcnn"],
                         help="Model type to use:")
     parser.add_argument("--epochs", type=int,
                         default=config.get("epochs", 1000),
@@ -182,7 +183,7 @@ def main():
                         default=config.get("eta_min", 0.000001),
                         help="Minimum learning rate for scheduler")
     parser.add_argument("--patience", type=int,
-                        default=config.get("patience", 100),
+                        default=config.get("patience", 500),
                         help="Patience for early stopping")
     parser.add_argument("--resume", action="store_true",
                         default=config.get("resume", False),
@@ -191,13 +192,13 @@ def main():
                         default=config.get("checkpoint_dir", None),
                         help="Directory containing checkpoints to resume from (if --resume is set)")
     parser.add_argument("--wandb_project", type=str,
-                        default=config.get("wandb_project", "Making Metric Same"),
+                        default=config.get("wandb_project", "Server5"),
                         help="Wandb project name for logging")
     parser.add_argument("--shuffle", action="store_true",
                         default=config.get("shuffle", True),
                         help="Shuffle the dataset during training")
     parser.add_argument("--stage", type=int,
-                        default=config.get("stage", 1),
+                        default=config.get("stage", 2),
                         help="Stage value for TrajectoryDataset (default: 1)")
     parser.add_argument("--delta", type=float,
                         default=config.get("delta", 0.001),
@@ -215,7 +216,7 @@ def main():
         "epochs": args.epochs,
         "batch_size": args.batch_size,
         "model": args.model_name,
-        "dataset": args.train_data_path.split("/")[-1].split(".")[0],
+        "dataset": args.train_val_data_path.split("/")[-1].split(".")[0],
         "scheduler": args.scheduler_type,
         "T_0": args.T_0,
         "T_mult": args.T_mult,
@@ -229,8 +230,10 @@ def main():
     start_time = time.time()
     end_epoch = args.epochs
     print(f"Starting training from epoch {start_epoch} to {end_epoch}")
-    train_dataset = TrajectoryDataset(args.train_data_path, split='train', stage=args.stage)
-    val_dataset = TrajectoryDataset(args.train_data_path, split='val', stage=args.stage)
+    
+    # CHANGED: Use train_val_data_path for both datasets (split logic is inside TrajectoryDataset)
+    train_dataset = TrajectoryDataset(args.train_val_data_path, split='train', stage=args.stage)
+    val_dataset = TrajectoryDataset(args.train_val_data_path, split='val', stage=args.stage)
 
     train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=args.shuffle)
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=args.shuffle)
@@ -259,11 +262,11 @@ def main():
         log_dir = os.path.join(checkpoint_dir, "../log")
         rollout_dir = os.path.join(checkpoint_dir, "../rollout")
     else:
-        checkpoint_dir, log_dir, rollout_dir = prepare_files_and_directories(args.output_dir, args.model_name, args.train_data_path)
+        checkpoint_dir, log_dir, rollout_dir = prepare_files_and_directories(args.output_dir, args.model_name, args.train_val_data_path)
     
     start_epoch, epoch_training_losses, step_training_losses = load_checkpoint(model, optimizer, scheduler, checkpoint_dir)
 
-        # Copy config.json to log_dir
+    # Copy config.json to log_dir
     config_copy_path = os.path.join(log_dir, "config.json")
     try:
         shutil.copy2(args.config, config_copy_path)

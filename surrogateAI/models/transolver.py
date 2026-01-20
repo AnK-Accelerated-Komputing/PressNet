@@ -3,6 +3,7 @@ import numpy as np
 import torch.nn as nn
 from timm.models.layers import trunc_normal_
 from einops import rearrange, repeat
+from utilities import common
 
 device = torch.device('cuda')
 
@@ -139,16 +140,22 @@ class Model(nn.Module):
                  slice_num=32,
                  ref=8,
                  unified_pos=False,
+                 num_node_types=9,
                  ):
         super(Model, self).__init__()
         self.__name__ = 'UniPDE_3D'
         self.ref = ref
         self.unified_pos = unified_pos
+        self.num_node_types = num_node_types
+    
+    # Calculate actual input dimension: position (space_dim) + one-hot node types (num_node_types)
+        actual_input_dim = space_dim + num_node_types
+
         if self.unified_pos:
             self.preprocess = MLP(fun_dim + self.ref * self.ref * self.ref, n_hidden * 2, n_hidden, n_layers=0,
                                   res=False, act=act)
         else:
-            self.preprocess = MLP(fun_dim + space_dim, n_hidden * 2, n_hidden, n_layers=0, res=False, act=act)
+            self.preprocess = MLP(fun_dim + actual_input_dim, n_hidden * 2, n_hidden, n_layers=0, res=False, act=act)
 
         self.n_hidden = n_hidden
         self.space_dim = space_dim
@@ -176,46 +183,21 @@ class Model(nn.Module):
             nn.init.constant_(m.bias, 0)
             nn.init.constant_(m.weight, 1.0)
 
-    # def get_grid(self, my_pos):
-    #     # my_pos 1 N 3
-    #     batchsize = my_pos.shape[0]
-
-    #     gridx = torch.tensor(np.linspace(-1.5, 1.5, self.ref), dtype=torch.float)
-    #     gridx = gridx.reshape(1, self.ref, 1, 1, 1).repeat([batchsize, 1, self.ref, self.ref, 1])
-    #     gridy = torch.tensor(np.linspace(0, 2, self.ref), dtype=torch.float)
-    #     gridy = gridy.reshape(1, 1, self.ref, 1, 1).repeat([batchsize, self.ref, 1, self.ref, 1])
-    #     gridz = torch.tensor(np.linspace(-4, 4, self.ref), dtype=torch.float)
-    #     gridz = gridz.reshape(1, 1, 1, self.ref, 1).repeat([batchsize, self.ref, self.ref, 1, 1])
-    #     grid_ref = torch.cat((gridx, gridy, gridz), dim=-1).cuda().reshape(batchsize, self.ref ** 3, 3)  # B 4 4 4 3
-
-    #     pos = torch.sqrt(
-    #         torch.sum((my_pos[:, :, None, :] - grid_ref[:, None, :, :]) ** 2,
-    #                   dim=-1)). \
-    #         reshape(batchsize, my_pos.shape[1], self.ref * self.ref * self.ref).contiguous()
-    #     return pos
-
-    # def forward(self, data):
-    #     cfd_data, geom_data = data
-    #     x, fx, T = cfd_data.x, None, None
-    #     x = x[None, :, :] # adds one dimension [32186, 7] ->[1, 32186, 7]
-    #     if self.unified_pos:
-    #         new_pos = self.get_grid(cfd_data.pos[None, :, :])
-    #         x = torch.cat((x, new_pos), dim=-1)
-
-    #     if fx is not None:
-    #         fx = torch.cat((x, fx), -1)
-    #         fx = self.preprocess(fx)
-    #     else:
-    #         fx = self.preprocess(x)
-    #         fx = fx + self.placeholder[None, None, :]
-
-    #     for block in self.blocks:
-    #         fx = block(fx)
-
-    #     return fx[0]
     def forward(self, data):
-        data = data['curr_pos'].to(device)
-        x = data[None, :, :] # adds one dimension [N,N] ->[1,N,N]
+
+         # Process inputs following the reference pattern
+        pos = data['curr_pos'].to(device)
+        node_type = data['node_type'].to(device)
+    
+        # Convert node_type to one-hot encoding using common.NodeType.SIZE
+        one_hot_node_type = nn.functional.one_hot(node_type.to(torch.int64), common.NodeType.SIZE).float()
+        one_hot_node_type = one_hot_node_type.squeeze(1)
+    
+        # Concatenate world position with one-hot encoded node types
+        x = torch.cat((pos, one_hot_node_type), dim=1)
+    
+        # Add batch dimension [N, C] -> [1, N, C]
+        x = x.unsqueeze(0)
         fx = self.preprocess(x)
         fx = fx + self.placeholder[None, None, :]
 

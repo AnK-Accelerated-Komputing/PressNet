@@ -43,7 +43,7 @@ def _rollout(model, initial_state, num_steps, target_world_pos):
 
 def evaluate(model, trajectory, num_steps=None):
     """Performs model rollouts and create stats."""
-    initial_state = {k: torch.squeeze(v, 0)[0] for k, v in trajectory.items()}
+    initial_state = {k: torch.squeeze(v, 0)[0] for k, v in trajectory.items()} # creates a dictionary of intial state
     if num_steps is None:
         num_steps = trajectory['mesh_pos'].squeeze(0).shape[0]
     prediction, cur_positions, cur_velocities, stress = _rollout(model, initial_state, num_steps, trajectory['next_pos'].squeeze(0).to(device))

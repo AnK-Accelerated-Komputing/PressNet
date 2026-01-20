@@ -49,7 +49,8 @@ PARAMETERS = {
                 size=1, batch=2, model=del_thermal_model, evaluator=thermal_eval, loss_type='del_thermal',
                 stochastic_message_passing_used='False')
     }
-
+ # defining parameters for different models options include press, thermal, del_thermal
+ 
 def load_model(inference_config,params,checkpoint_dir):
     
     

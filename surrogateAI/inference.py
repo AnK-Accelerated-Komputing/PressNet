@@ -47,7 +47,7 @@ def load_model(inference_config, params, checkpoint_dir):
         inference_config['message_passing_steps'],
         inference_config['attention']
     )
-    model.load_model(os.path.join(checkpoint_dir, 'epoch_model_checkpoint'))
+    model.load_model(os.path.join(checkpoint_dir, 'best_model_checkpoint'))
     model.to(device)
     model.eval()
     return model
@@ -71,7 +71,7 @@ def inference(checkpoint_dir, val_dir, rollout_dir):
     # Inference configuration
     inference_config = {
         "model": "press",
-        "core_model": "regDGCNN_seg",
+        "core_model": "transolver",
         "message_passing_aggregator": "sum",
         "message_passing_steps": 15,
         "attention": False
@@ -117,9 +117,9 @@ def inference(checkpoint_dir, val_dir, rollout_dir):
 
 def main():
     # Define directories
-    checkpoint_dir = "/home/bipinshrestha228/PressNet/final_data_and_checkpoitns/ujwal_dai_checkpoints/checkpoint"
-    val_dir = "/home/bipinshrestha228/PressNet/final_data_and_checkpoitns/final_correct_data/400_step_dataset_h5/Channel_U_press_dataset.h5"
-    rollout_dir = "/home/bipinshrestha228/PressNet/conference_paper/testing"
+    checkpoint_dir = r"J:\Files\03_Work\10_AnK\3_PressNetData\Input\Channel_U_press_dataset\Mon-Nov-24-17-49-54-2025\checkpoint"
+    val_dir = r"J:\Files\03_Work\10_AnK\3_PressNetData\Input\Channel_U_press_dataset.h5"
+    rollout_dir = r"J:\Files\03_Work\10_AnK\3_PressNetData\Output"
 
     # Run inference
     inference(checkpoint_dir, val_dir, rollout_dir)

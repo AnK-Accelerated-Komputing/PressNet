@@ -11,6 +11,8 @@ class TrajectoryDataset(Dataset):
         self.data_path = data_path
         self.split = split
         self.stage = stage
+        self.skip = 3  # <--- Renamed from stride. Skips 3 steps (1 -> 4 -> 7...)
+        
         self.is_processed = self._is_processed()
 
         if not self.is_processed:
@@ -24,50 +26,52 @@ class TrajectoryDataset(Dataset):
         return self.data[idx]
 
     def _is_processed(self):
+        # Checks for processed file. 
+        # Ideally, if you change 'skip', you should delete old .pt files to force re-processing.
         return os.path.exists(self.data_path.replace('.h5', f'_{self.split}_{self.stage}.pt'))
 
     def process_data(self):
-        print("processing data...")
+        print(f"Processing data for split: {self.split} with skip: {self.skip}...")
         base_folder = os.path.dirname(self.data_path)
-        data_name = self.data_path.split('/')[-1].split('.')[0].replace('_press_dataset','')
+        
+        # Determine meta file name
+        data_name = os.path.basename(self.data_path).replace('.h5', '')
         meta_file = os.path.join(base_folder, f'{data_name}_meta.json')
+        
+        if not os.path.exists(meta_file):
+            raise FileNotFoundError(f"Meta file not found: {meta_file}")
+
         with open(meta_file, 'r') as f:
             meta_data = json.load(f)
 
         final_data = []
         with h5py.File(self.data_path, 'r') as h5_file:
             group_names = list(h5_file.keys())
-            random.seed(42)   # fixed seed for reproducibility
+            
+            random.seed(42)   
             random.shuffle(group_names)
             total_groups = len(group_names)
             
-            # 70% for train, 15% val, 15% test
-            if self.split == 'train':
+            # --- SPLIT LOGIC ---
+            if self.split == 'test':
+                selected_groups = group_names
+                print(f"Test split: {len(selected_groups)} groups.")
+            elif self.split == 'train':
                 group_limit = round(total_groups * 0.7)
                 selected_groups = group_names[:group_limit]
+                print(f"Train split: {len(selected_groups)} groups.")
             elif self.split == 'val':
-                group_limit_start = round(total_groups * 0.7)
-                group_limit_end = round(total_groups * 0.9)
-                if group_limit_end == group_limit_start:
-                    selected_groups = group_names[group_limit_start:]
-                else:
-                    selected_groups = group_names[group_limit_start:group_limit_end]
-            else:  # test
-                group_limit_start = round(total_groups * 0.9)
-                if group_limit_start == total_groups:
-                    group_limit_start -= 1
-                selected_groups = group_names[group_limit_start:]
-            print(f"selected groups: {selected_groups}")
+                group_limit = round(total_groups * 0.7)
+                selected_groups = group_names[group_limit:]
+                print(f"Val split: {len(selected_groups)} groups.")
+            # -------------------
+
             for group_name in selected_groups:
-                print(f"processing {group_name}")
                 group = h5_file[group_name]
                 meta_info = meta_data[group_name]
+                total_steps = meta_info['number of steps'] 
 
-                total_steps = meta_info['number of steps']
-                num_nodes = meta_info['number of nodes']
-                num_cells = meta_info['number of cells']
-
-                # Determine step range based on stage
+                # --- STAGE LOGIC ---
                 if self.stage == 1:
                     start_step = 1
                     end_step = total_steps // 3
@@ -76,33 +80,35 @@ class TrajectoryDataset(Dataset):
                     end_step = 2 * (total_steps // 3)
                 elif self.stage == 3:
                     start_step = 2 * (total_steps // 3) + 1
-                    end_step = total_steps-2                # -2 is introduced so that end step is 399
+                    # Ensure we don't go out of bounds when looking for (step + skip)
+                    end_step = total_steps - self.skip 
                 else:
                     start_step = 1
-                    end_step = total_steps
+                    end_step = total_steps - self.skip
 
-                step_limit = end_step - start_step + 1
-
-                # Common datasets
-                cells = torch.tensor(group['cells'][:])  # Convert to tensor
+                # Common static data
+                cells = torch.tensor(group['cells'][:])
                 mesh_pos = torch.tensor(group['mesh_pos'][:])
                 node_type = torch.tensor(group['node_type'][:])
 
+                # --- PROCESSING WITH SKIP ---
                 if self.split == 'train':
-                    for step_num in range(start_step, end_step + 1):
+                    # range(start, end, skip) handles the jumping
+                    for step_num in range(start_step, end_step + 1, self.skip):
                         step_key = f'step_{step_num}'
-                        next_step_key = f'step_{step_num + 1}'
+                        # Target is current step + skip
+                        next_step_key = f'step_{step_num + self.skip}'
 
                         if step_key in group:
                             step_group = group[step_key]
-                            curr_pos = torch.tensor(step_group['world_pos'][:])  # Convert to tensor
+                            curr_pos = torch.tensor(step_group['world_pos'][:])
 
                             if next_step_key in group:
                                 next_step_group = group[next_step_key]
                                 next_pos = torch.tensor(next_step_group['world_pos'][:])
                                 next_stress = torch.tensor(next_step_group['stress'][:])
                             else:
-                                next_pos = None
+                                continue 
 
                             step_data = {
                                 'cells': cells,
@@ -113,18 +119,21 @@ class TrajectoryDataset(Dataset):
                                 'next_stress': next_stress
                             }
                             final_data.append(step_data)
+
                 else:
-                    # For val/test, accumulate the data in lists
+                    # Val/Test: Accumulate trajectories
                     curr_pos_list = []
                     next_pos_list = []
                     next_stress_list = []
 
-                    for step_num in range(start_step, end_step + 1):
+                    for step_num in range(start_step, end_step + 1, self.skip):
                         step_key = f'step_{step_num}'
-                        next_step_key = f'step_{step_num + 1}'
+                        next_step_key = f'step_{step_num + self.skip}'
 
-                        if step_key in group:
+                        if step_key in group and next_step_key in group:
                             step_group = group[step_key]
+                            next_step_group = group[next_step_key]
+
                             curr_pos_list.append(torch.tensor(step_group['world_pos'][:]))
 
                         if next_step_key in group:
@@ -148,9 +157,9 @@ class TrajectoryDataset(Dataset):
 
                     final_data.append(grouped_data)
 
-        # Save data to a split-specific .pt file
+        # Save
         torch.save(final_data, self.data_path.replace('.h5', f'_{self.split}_{self.stage}.pt'))
-        print(f"Data successfully saved to {self.split}_{self.stage}.pt")
+        print(f"Saved processed data to: {self.data_path.replace('.h5', f'_{self.split}_{self.stage}.pt')}")
 
     def load_data(self):
         return torch.load(self.data_path.replace('.h5', f'_{self.split}_{self.stage}.pt'))

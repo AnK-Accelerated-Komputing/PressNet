@@ -44,9 +44,18 @@ def loss_fn(inputs, network_output, model):
     target_velocity = target_position - cur_position
 
     node_type = inputs['node_type'].to(device)
+    normalizer_tuple = model.get_output_normalizer()
+    normalized_result = normalizer_tuple[0](target_velocity)
+    
+    # If the result is a tuple, extract the first element
+    if isinstance(normalized_result, tuple):
+        target_normalized = normalized_result[0]
+    else:
+        target_normalized = normalized_result
 
-    world_pos_normalizer = model.get_output_normalizer()
-    target_normalized = world_pos_normalizer(target_velocity)
+    # world_pos_normalizer = model.get_output_normalizer()
+    # print(f"Normalizer type: {type(world_pos_normalizer)}, value: {world_pos_normalizer}")
+    # target_normalized = world_pos_normalizer(target_velocity)[0]
     loss_mask = torch.eq(node_type[:, 0], torch.tensor([common.NodeType.NORMAL.value], device=device).int())
     pos_prediction = network_output[:,:3]
 
@@ -135,12 +144,12 @@ def main():
     device = torch.device('cuda')
 
     # Initialize Wandb
-    wandb.init(project="Rollout_cell", config={
+    wandb.init(project="Rollout_cell5", config={
         "learning_rate": 0.001,
-        "epochs": 1000,
+        "epochs": 1,
         "batch_size": 1,
-        "model": "regDGCNN_seg",
-        "dataset": "Channel_U_coarse_400",
+        "model": "transolver",
+        "dataset": "merged_1500_coarse_dataset_1.h5",
         # "message_passing_step": "3",
         # "dropout": "0.4",
         "scheduler": "CosineAnnealingWarmRestarts",  # Updated config
@@ -152,10 +161,10 @@ def main():
 
     start_epoch = 0
     start_time = time.time()
-    end_epoch = 1000
+    end_epoch = 1
     print(f"starting training from epoch {start_epoch} to {end_epoch}")
-    train_data_path = "/home/ujwal/NewPressnet/local/input/Channel_U_press_dataset.h5"
-    output_dir = "/home/ujwal/NewPressnet/local/output"
+    train_data_path = r"J:\Files\03_Work\10_AnK\3_PressNetData\h5_data\MEDIUM\merged_1500_medium.h5"
+    output_dir = r"J:\Files\03_Work\10_AnK\3_PressNetData\Output\Testing_h5\merged_medium"
     train_dataset = TrajectoryDataset(train_data_path, split='train', stage=1)
     val_dataset = TrajectoryDataset(train_data_path, split='val', stage=1)
     # print(len(train_dataset),len(train_dataset)*3/399)

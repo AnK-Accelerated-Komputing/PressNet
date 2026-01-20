@@ -14,7 +14,6 @@ from torch_geometric.data import Data
 
 device = torch.device('cuda')
 
-
 class Model(nn.Module):
     """Model for static cloth simulation."""
 
@@ -57,6 +56,7 @@ class Model(nn.Module):
                 dropout=0.1,
                 edge_dim=8  # Assuming edge feature size is 8
             )
+
         elif core_model_name == 'regDGCNN_seg':
             self.core_model = regDGCNN_seg
             self.is_multigraph = False
@@ -67,6 +67,7 @@ class Model(nn.Module):
                 emb_dims=1024,  
                 dropout=0.1
             )
+            
         elif core_model_name == "regpointnet_seg":
             self.core_model = regpointnet_seg
             self.is_multigraph = False
@@ -80,7 +81,7 @@ class Model(nn.Module):
             self.learned_model = transolver.Model(n_hidden=256, n_layers=8, space_dim=3,
 				fun_dim=0,
 				n_head=8,
-				mlp_ratio=2, out_dim=3,
+				mlp_ratio=2, out_dim=4,
 				slice_num=32,
 				unified_pos=0
             )
@@ -236,6 +237,7 @@ class Model(nn.Module):
         output_mask = torch.stack([output_mask] * inputs['world_pos'].shape[-1], dim=1)
         velocity = self._output_normalizer.inverse(torch.where(output_mask, per_node_network_output, torch.tensor(0., device=device)))'''
         # print("per node network output shape",per_node_network_output.shape)
+
         velocity = self._output_normalizer.inverse(per_node_network_output[:, :3])
         stress = self._stress_output_normalizer.inverse(per_node_network_output[:, 3:4])
 
@@ -255,19 +257,19 @@ class Model(nn.Module):
         torch.save(self.learned_model, path + "_learned_model.pth")
         torch.save(self._output_normalizer, path + "_output_normalizer.pth")
         torch.save(self._node_dynamic_normalizer, path + "_node_dynamic_normalizer.pth")
-        # torch.save(self._stress_output_normalizer, path + "_stress_output_normalizer.pth")
+        torch.save(self._stress_output_normalizer, path + "_stress_output_normalizer.pth")
         torch.save(self._mesh_edge_normalizer, path + "_mesh_edge_normalizer.pth")
         torch.save(self._world_edge_normalizer, path + "_world_edge_normalizer.pth")
         torch.save(self._node_normalizer, path + "_node_normalizer.pth")
 
     def load_model(self, path):
-        self.learned_model = torch.load(path + "_learned_model.pth")
-        self._output_normalizer = torch.load(path + "_output_normalizer.pth")
-        self._node_dynamic_normalizer = torch.load(path + "_node_dynamic_normalizer.pth")
-        # self._stress_output_normalizer = torch.load(path + "_stress_output_normalizer.pth")
-        self._mesh_edge_normalizer = torch.load(path + "_mesh_edge_normalizer.pth")
-        self._world_edge_normalizer = torch.load(path + "_world_edge_normalizer.pth")
-        self._node_normalizer = torch.load(path + "_node_normalizer.pth")
+        self.learned_model = torch.load(path + "_learned_model.pth", weights_only=False)
+        self._output_normalizer = torch.load(path + "_output_normalizer.pth", weights_only=False)
+        self._node_dynamic_normalizer = torch.load(path + "_node_dynamic_normalizer.pth", weights_only=False)
+        self._stress_output_normalizer = torch.load(path + "_stress_output_normalizer.pth", weights_only=False)
+        self._mesh_edge_normalizer = torch.load(path + "_mesh_edge_normalizer.pth", weights_only=False)
+        self._world_edge_normalizer = torch.load(path + "_world_edge_normalizer.pth", weights_only=False)
+        self._node_normalizer = torch.load(path + "_node_normalizer.pth", weights_only=False)
 
     def evaluate(self):
         self.eval()

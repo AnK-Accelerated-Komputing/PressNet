@@ -361,8 +361,8 @@ def animate_rollout(data_path, save_directory,i=1,key="stress"):
 
 
 def main():
-    data_path =  '/home/ujwal/NEWPRESSNET/PressNet/Local/data/output/transolver/quarter_s_press_dataset/Tue-Jul-29-12-53-43-2025/rollout/rollout_epoch_999.pkl'
-    save_directory = '/home/ujwal/NEWPRESSNET/PressNet/Local/test/output'
+    data_path =  r"J:\Files\03_Work\10_AnK\999_Experimentation\concatenated_rollout_all.pkl"
+    save_directory = r"J:\Files\03_Work\10_AnK\999_Experimentation\Output\compare"
     os.makedirs(save_directory,exist_ok=True)
     animate_rollout(data_path, save_directory)
 
