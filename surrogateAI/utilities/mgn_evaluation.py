@@ -42,9 +42,9 @@ def obtain_step_loss(single_trajectory,loss='rmse'):
     }
     for i in range(single_trajectory['node_type'].size(dim=0)):
         node_type = single_trajectory['node_type'][i].to('cpu').flatten()
-        print(node_type.shape)
+        #print(node_type.shape)
         mask = node_type ==0
-        print(mask.shape)
+        #print(mask.shape)
 
         gt_stress = single_trajectory['gt_stress'][i].to('cpu').flatten()[mask]
         pred_stress = single_trajectory['pred_stress'][i].to('cpu').flatten()[mask]
@@ -446,8 +446,8 @@ def evaluate_rollout(rollout_pth, base_output_dir,plot=True):
     return
 
 def main():
-    base_dir = "/home/ujwal/Documents/PressNet_Inference/PressNet/datasets/data/oct29/output/transolver/PRESS_2D_QUARTER_press_dataset/Wed-Oct-29-15-39-42-2025/rollout"
-    rollout_pth = os.path.join(base_dir,'rollout_epoch_39.pkl')
+    base_dir = "/home/sushil/PressNet/datasetsoutput/encode_process_decode/coarse_1500_train_val/Sun-Jan-25-18-53-48-2026/rollout"
+    rollout_pth = os.path.join(base_dir,'rollout_epoch_171.pkl')
     output_dir = os.path.join(base_dir,'rollout_evaluation')
     evaluate_rollout(rollout_pth, output_dir,plot=False)
 

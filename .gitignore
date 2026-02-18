@@ -14,4 +14,8 @@ surrogateAI/config.json
 datasets/data
 datasets/data_gen_code
 wandb
-
+*.png
+*.pdf
+datasetsoutput
+mlflow.db
+_NAS_MOUNT

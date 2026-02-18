@@ -14,22 +14,21 @@ from utilities.dataset import TrajectoryDataset
 # Set device
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-# Parameters dictionary
+# --- 1. FIXED: Params matched to training code ---
 PARAMETERS = {
     'press': dict(
-        noise=0.003,
-        gamma=1.0,
         field='world_pos',
-        history=False,
-        size=3,
-        batch=1,
+        size=4,             # Changed from 3 to 4 to match training input
         model=press_model,
         evaluator=press_eval,
-        loss_type='deform',
-        stochastic_message_passing_used=False
+        k_neighbor=50,      # Added: Required for graph construction
+        dilated_k_sample=100, # Added: Required for graph construction
+        message_passing_steps=10,
+        world_radius=30,
+        slice=64,
+        edge_dim=8
     )
 }
-
 
 def save_rollout(rollout_path, trajectories, disp=""):
     """Save predicted trajectories to a pickle file."""
@@ -37,32 +36,43 @@ def save_rollout(rollout_path, trajectories, disp=""):
         pickle.dump(trajectories, f)
     print(f"Rollout {disp} saved to {rollout_path}")
 
-
 def load_model(inference_config, params, checkpoint_dir):
     """Load the model from a checkpoint."""
+    
+    # --- 2. FIXED: Initialization signature matches training ---
     model = params['model'].Model(
-        params,
-        inference_config['core_model'],
-        inference_config['message_passing_aggregator'],
-        inference_config['message_passing_steps'],
-        inference_config['attention']
+        params, 
+        core_model_name=inference_config['core_model']
     )
-    model.load_model(os.path.join(checkpoint_dir, 'best_model_checkpoint'))
+    
+    # Check if we are pointing to the parent folder or the specific best_checkpoint folder
+    # Based on your previous code, the file is inside "best_checkpoint"
+    if "best_checkpoint" not in checkpoint_dir and os.path.exists(os.path.join(checkpoint_dir, "best_checkpoint")):
+        load_path = os.path.join(checkpoint_dir, "best_checkpoint", 'best_model_checkpoint')
+    else:
+        load_path = os.path.join(checkpoint_dir, 'best_model_checkpoint')
+
+    print(f"Loading weights from: {load_path}")
+    model.load_model(load_path)
+    
     model.to(device)
     model.eval()
     return model
-
 
 def get_meta_data(data_path):
     """Load metadata JSON corresponding to the dataset."""
     base_folder = os.path.dirname(data_path)
     data_name = os.path.basename(data_path).split('.')[0]
+    # Handle cases where meta file might not match exact data name if needed
     meta_file = os.path.join(base_folder, f'{data_name}_meta.json')
-
-    with open(meta_file, 'r') as f:
-        meta_data = json.load(f)
-    return meta_data
-
+    
+    if os.path.exists(meta_file):
+        with open(meta_file, 'r') as f:
+            meta_data = json.load(f)
+        return meta_data
+    else:
+        print(f"Warning: Meta file {meta_file} not found.")
+        return {}
 
 def inference(checkpoint_dir, val_dir, rollout_dir):
     """Run inference on dataset and save rollout."""
@@ -71,59 +81,70 @@ def inference(checkpoint_dir, val_dir, rollout_dir):
     # Inference configuration
     inference_config = {
         "model": "press",
-        "core_model": "transolver",
-        "message_passing_aggregator": "sum",
-        "message_passing_steps": 15,
-        "attention": False
+        "core_model": "transolver", # Ensure this matches the trained model type
     }
 
-    # Load dataset and model
-    val_dataset = TrajectoryDataset(val_dir, split='val', stage=1)
+    # Load dataset
+    # Note: Ensure your dataset supports split='test'. If not, change to 'val'.
+    val_dataset = TrajectoryDataset(val_dir, split='test', stage=1)
     val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False)
+    
     params = PARAMETERS[inference_config['model']]
+    
+    # Load Model
     model = load_model(inference_config, params, checkpoint_dir)
 
     meta_data = get_meta_data(val_dir)
-    groups = sorted(list(meta_data.keys()))
-    print('meta data is', meta_data)
+    groups = sorted(list(meta_data.keys())) if meta_data else []
+    
     info = {
         'index': [],
         'file_name' : [],
         'inference_time' : [],
     }
+
     # Run inference
     trajectories = []
-    for idx, data in enumerate(val_loader):
-        info['index'].append(idx)
-        group_name = groups[idx]
-        info['file_name'].append(meta_data[group_name]['data type'])
-        
-        start_time = time.time()
-        _, prediction_trajectory = press_eval.evaluate(model, data)
-        trajectories.append(prediction_trajectory)
-        end_time = time.time()
+    print(f"Starting inference on {len(val_loader)} samples...")
+    
+    with torch.no_grad():
+        for idx, data in enumerate(val_loader):
+            info['index'].append(idx)
+            
+            # Safe handling if metadata is missing
+            if idx < len(groups):
+                group_name = groups[idx]
+                fname = meta_data[group_name].get('data type', 'unknown')
+                info['file_name'].append(fname)
+            else:
+                info['file_name'].append(f"sample_{idx}")
+            
+            start_time = time.time()
+            _, prediction_trajectory = press_eval.evaluate(model, data)
+            end_time = time.time()
 
-        info['inference_time'].append(end_time-start_time)
+            trajectories.append(prediction_trajectory)
+            info['inference_time'].append(end_time - start_time)
 
-        print(f"Processed sample {idx} in {end_time - start_time:.2f}s")
+            print(f"Processed sample {idx} in {end_time - start_time:.2f}s")
 
     # Save predictions
     rollout_file = Path(rollout_dir) / "infer_rollout.pkl"
     with open(os.path.join(rollout_dir, 'rollout_info.json'), 'w') as f:
-        json.dump(info, f,indent=4)
+        json.dump(info, f, indent=4)
 
     save_rollout(str(rollout_file), trajectories)
 
-
 def main():
     # Define directories
-    checkpoint_dir = r"J:\Files\03_Work\10_AnK\3_PressNetData\Input\Channel_U_press_dataset\Mon-Nov-24-17-49-54-2025\checkpoint"
-    val_dir = r"J:\Files\03_Work\10_AnK\3_PressNetData\Input\Channel_U_press_dataset.h5"
-    rollout_dir = r"J:\Files\03_Work\10_AnK\3_PressNetData\Output"
+    # Ensure this points to the folder containing 'best_checkpoint' or the checkpoint itself
+    checkpoint_dir = r"/home/sushil/PressNet/datasetsoutput/transolver/coarse_1500_train_val/Transolver_C_ST1_Slice64/checkpoint"
+    
+    val_dir = r"/home/sushil/PressNet/datasets/data/coarse/coarse_1500_train_val.h5"
 
+    rollout_dir = r"/home/sushil/PressNet/datasetsoutput/transolver/coarse_1500_train_val/infer_rollout"
     # Run inference
     inference(checkpoint_dir, val_dir, rollout_dir)
-
 
 if __name__ == "__main__":
     main()

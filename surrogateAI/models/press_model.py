@@ -18,7 +18,7 @@ class Model(nn.Module):
     """Model for static cloth simulation."""
 
     def __init__(self, params, core_model_name="encode_process_decode", message_passing_aggregator='sum',
-                 message_passing_steps=3, attention=False):
+                 message_passing_steps=5, attention=False):
         super(Model, self).__init__()
         self._params = params
         self._output_normalizer = normalization.Normalizer(size=3, name='output_normalizer')
@@ -41,7 +41,7 @@ class Model(nn.Module):
                 output_size=params['size'],
                 latent_size=64,
                 num_layers=2,
-                message_passing_steps=self.message_passing_steps,
+                message_passing_steps=params['message_passing_steps'],
                 message_passing_aggregator=self.message_passing_aggregator, attention=self._attention,
                 dropout_rate = 0.3
             )
@@ -54,7 +54,7 @@ class Model(nn.Module):
                 nhid=128,
                 output=params['size'],
                 dropout=0.1,
-                edge_dim=8  # Assuming edge feature size is 8
+                edge_dim=params['edge_dim']  # Assuming edge feature size is 8
             )
 
         elif core_model_name == 'regDGCNN_seg':
@@ -63,7 +63,7 @@ class Model(nn.Module):
             self.learned_model = regDGCNN_seg.regDGCNN_seg(
                 output_size=params['size'],
                 input_dims=12,  
-                k=20,  
+                k=params['k_neighbor'],  
                 emb_dims=1024,  
                 dropout=0.1
             )
@@ -82,7 +82,7 @@ class Model(nn.Module):
 				fun_dim=0,
 				n_head=8,
 				mlp_ratio=2, out_dim=4,
-				slice_num=32,
+				slice_num=params['slice'],
 				unified_pos=0
             )
         elif core_model_name == "dilated_dgcnn":
@@ -145,7 +145,7 @@ class Model(nn.Module):
         # print(senders.shape, receivers.shape)
 
         # find world edge
-        radius = 25
+        radius = 30
         world_distance_matrix = torch.cdist(world_pos, world_pos, p=2)
         # print("----------------------------------")
         # print(torch.nonzero(world_distance_matrix).shape[0])

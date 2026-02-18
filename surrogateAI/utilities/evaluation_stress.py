@@ -55,12 +55,12 @@ def obtain_step_loss(single_trajectory,loss='rmse'):
         gt_y_deform = torch.abs((gt_pos-mesh_pos)[:,1].flatten())
         pred_y_deform = torch.abs((pred_pos-mesh_pos)[:,1].flatten())
         
-        if i == 99 or i == 199:
+        """if i == 99 or i == 199:
             gt["deform_y"].append(gt["deform_y"][-1])
             gt["max_deform_y"].append(gt["max_deform_y"][-1])
-        else:
-            gt["deform_y"].append(torch.mean(gt_y_deform))
-            gt["max_deform_y"].append(torch.max(gt_y_deform))
+        else:"""
+        gt["deform_y"].append(torch.mean(gt_y_deform))
+        gt["max_deform_y"].append(torch.max(gt_y_deform))
         
         pred["deform_y"].append(torch.mean(pred_y_deform))
         pred["max_deform_y"].append(torch.max(pred_y_deform))
@@ -380,8 +380,8 @@ def evaluate_rollout(rollout_pth, base_output_dir,plot=True):
     return
 
 def main():
-    base_dir = "/home/ank-server5/ANK/PressNet/datasets/output/regDGCNN_seg/coarse_1500_train_val/Tue-Dec-30-12-50-35-2025/rollout"
-    rollout_pth = os.path.join(base_dir,'rollout_epoch_200.pkl')
+    base_dir = "/home/sushil/PressNet/_NAS_MOUNT/ank-server1/prj_accelerated_physics/prj_pressnet/Training_data_Susil/Server6/output/transolver/coarse_1500_train_val/Transolver_C_ST1_Slice16/rollout"
+    rollout_pth = os.path.join(base_dir,'infer_rollout.pkl')
     output_dir = os.path.join(base_dir,'rollout_evaluation_transolver_1500_coarse')
     evaluate_rollout(rollout_pth, output_dir,plot=True)
 
