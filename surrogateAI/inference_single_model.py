@@ -145,9 +145,9 @@ def inference(checkpoint_dir, val_dir,rollout_dir,continuous=True,animation=Fals
     return
 
 def main():
-    checkpoint_dir = '/home/user/AnK_MeshGraphNets/output/press_3d/Wed-Jan-15-05-13-20-2025/1/checkpoint'
-    val_dir = '/home/user/AnK_MeshGraphNets/raw_data/DATA_COMBINED/train'
-    rollout_dir = '/home/user/AnK_MeshGraphNets/test_results/combined_thermal_train'
+    checkpoint_dir = '/home/sushil/PressNet/_Nas_Mount/ank-server1/prj_accelerated_physics/prj_pressnet/Training_data_Susil/transolver/E1_C/Transolver_Slice64/Transolver_C_ST2_Sl64/checkpoint/best_checkpoint'
+    val_dir = '/home/sushil/PressNet/datasets/data/coarse/coarse_1500_train_val.h5'
+    rollout_dir = '/home/sushil/PressNet/_Nas_Mount/ank-server1/prj_accelerated_physics/prj_pressnet/Training_data_Susil/transolver/E1_C/Transolver_Slice64/Transolver_C_ST2_Sl64/infer_rollout'
 
     inference(checkpoint_dir, val_dir,rollout_dir,continuous=True,animation=False,animation_html=False,evaluate=False)
 

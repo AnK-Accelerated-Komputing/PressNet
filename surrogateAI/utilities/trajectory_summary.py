@@ -327,12 +327,21 @@ def evaluate_rollout(rollout_pth, output_dir):
 # Main
 # --------------------------------------------------
 def main():
-    base_dir = "/home/sushil/PressNet/datasetsoutput/transolver/coarse_1500_train_val/Transolver_C_ST1_Slice64/infer_rollout"
-    rollout_pth = os.path.join(base_dir, "infer_rollout.pkl")
-    output_dir = os.path.join(base_dir, "evaluation_max_error_infer")
+    base_dir = [
+        "/home/sushil/PressNet/_Nas_Mount/ank-server1/prj_accelerated_physics/prj_pressnet/Training_data_Susil/transolver/E1_C/Transolver_Slice64/Combined_Inference_OneStepPrediction/test",
+        "/home/sushil/PressNet/_Nas_Mount/ank-server1/prj_accelerated_physics/prj_pressnet/Training_data_Susil/dilated/Combined_Inference_K20_D100_onestepprediction/test",
+        "/home/sushil/PressNet/_Nas_Mount/ank-server1/prj_accelerated_physics/prj_pressnet/Training_data_Susil/reg/Coarse_ST1/Inference_Output_OnestepPrediction/test",
+    ]
 
-    evaluate_rollout(rollout_pth, output_dir)
+    for base in base_dir:
+        if not os.path.exists(base):
+            print(f"Error: Base directory not found at {base}")
+            continue
 
+        rollout_pth = os.path.join(base, "concatenated_rollout_all.pkl")
+        output_dir = os.path.join(base, "rollout_evaluation_max_error")
+
+        evaluate_rollout(rollout_pth, output_dir)
 
 if __name__ == "__main__":
     main()

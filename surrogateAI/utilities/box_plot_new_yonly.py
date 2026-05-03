@@ -1,0 +1,150 @@
+import pandas as pd
+import json
+import seaborn as sns
+import matplotlib.pyplot as plt
+import matplotlib.ticker as mtick  # Added for percentage formatting
+import os
+
+# ==========================================
+# 1. CONFIGURATION
+# ==========================================
+# Update these paths to point to the new JSON files (e.g., rollout_info.json)
+file_map = {
+    "Transolver": "/home/sushil/PressNet/_Nas_Mount/ank-server1/prj_accelerated_physics/prj_pressnet/Training_data_Susil/transolver/E1_C/Transolver_Slice64/Combined_Inference_OneStepPrediction/test/Combined_Inference_OneStepPrediction_concatenated_rollout_all_3_metric.json",
+    "Dilated_DGCNN": "/home/sushil/PressNet/_Nas_Mount/ank-server1/prj_accelerated_physics/prj_pressnet/Training_data_Susil/dilated/Combined_Inference_K20_D100_onestepprediction/test/Combined_Inference_K20_D100_onestepprediction_concatenated_rollout_all_3_metric.json",
+    "Reg_DGCNN": "/home/sushil/PressNet/_Nas_Mount/ank-server1/prj_accelerated_physics/prj_pressnet/Training_data_Susil/reg/Coarse_ST1/Inference_Output_OnestepPrediction/test/Inference_Output_OnestepPrediction_concatenated_rollout_all_3_metric.json",
+}
+
+SAVE_FILENAME = "ModelComparison_TestSet_OneStepPrediction_Yonly.png"
+
+# ==========================================
+# 2. DATA LOADING & PROCESSING
+# ==========================================
+def load_and_process_data(paths):
+    processed_records = []
+    for label, path in paths.items():
+        if not os.path.exists(path):
+            print(f"Warning: File not found for {label} at {path}")
+            continue
+            
+        with open(path, 'r') as f:
+            try:
+                data = json.load(f)
+            except json.JSONDecodeError:
+                print(f"Error parsing JSON in {path}")
+                continue
+            
+            # The new evaluation script stores trajectory data in a "losses" list
+            losses_list = data.get("losses", [])
+            
+            for idx, entry in enumerate(losses_list):
+                # Extract the Step-wise average nRMSE (as decimals)
+                y_disp_val = entry.get("step_y_deform_nrmse_avg")
+                
+                # [DISABLED] Stress plotting
+                # stress_val = entry.get("step_stress_nrmse_avg")
+                # if stress_val is not None:
+                #     processed_records.append({
+                #         "Param": label,
+                #         "Trajectory": idx,
+                #         "Qty": "Stress",
+                #         "Error_Val": stress_val * 100.0
+                #     })
+                
+                if y_disp_val is not None:
+                    processed_records.append({
+                        "Param": label,
+                        "Trajectory": idx,
+                        "Qty": "Y-Disp",
+                        "Error_Val": y_disp_val * 100.0  # Converted to %
+                    })
+                    
+    return pd.DataFrame(processed_records)
+
+# ==========================================
+# 3. DATA PREPARATION & OUTLIER LOGIC
+# ==========================================
+df = load_and_process_data(file_map)
+
+if df.empty:
+    print("❌ Error: No data was parsed. Check your JSON keys and file paths.")
+else:
+    # Use Categorical to maintain the order from file_map keys
+    df['Param'] = pd.Categorical(df['Param'], categories=list(file_map.keys()), ordered=True)
+    df = df.sort_values("Param")
+
+    # Define the Y-limit for the plot dynamically to cut off extreme outliers
+    y_limit = df["Error_Val"].quantile(0.96) * 1.6
+
+    # Calculate Outliers for the terminal report
+    def calculate_outliers(group):
+        q1 = group["Error_Val"].quantile(0.25)
+        q3 = group["Error_Val"].quantile(0.75)
+        iqr = q3 - q1
+        upper_whisker = q3 + 1.5 * iqr
+        
+        total_outliers = group[group["Error_Val"] > upper_whisker].shape[0]
+        hidden_outliers = group[group["Error_Val"] > y_limit].shape[0]
+        
+        return pd.Series({
+            "Total_Outliers": total_outliers,
+            "Hidden_by_Limit": hidden_outliers,
+            "Max_Error (%)": round(group["Error_Val"].max(), 4),
+            "Mean_Error (%)": round(group["Error_Val"].mean(), 4)
+        })
+
+    outlier_summary = df.groupby(['Param', 'Qty'], observed=True).apply(calculate_outliers).reset_index()
+
+    # --- Print Terminal Report ---
+    print("\n" + "="*85)
+    print("STATISTICAL SUMMARY (Metric: Step-wise nRMSE [%])")
+    print(f"Current Y-Axis Display Limit: {y_limit:.2f}%")
+    print("="*85)
+    print(outlier_summary.to_string(index=False))
+    print("-" * 85)
+    print(f"TOTAL HIDDEN DATA POINTS ACROSS ALL GROUPS: {int(outlier_summary['Hidden_by_Limit'].sum())}")
+    print("="*85 + "\n")
+
+    # ==========================================
+    # 4. PLOTTING
+    # ==========================================
+    sns.set_context("paper", font_scale=1.1)
+    sns.set_style("ticks")
+
+    fig, ax = plt.subplots(figsize=(5.5, 6.5))
+
+    bp = sns.boxplot(
+        data=df, 
+        x="Param", 
+        y="Error_Val", 
+        # hue="Qty",  # <-- Removed so the single boxplots sit dead-center
+        palette="Set1",
+        width=0.5, 
+        linewidth=1.2,
+        fliersize=2.5,   
+        showmeans=True,
+        meanprops={"marker":"^", "markerfacecolor":"white", "markeredgecolor":"black", "markersize": 5}
+    )
+
+    # Apply the adaptive Y-axis limit
+    plt.ylim(0, y_limit)
+
+    ax.yaxis.set_major_formatter(mtick.PercentFormatter(decimals=2))
+
+    # --- Styling ---
+    sns.despine() 
+    
+    plt.xlabel("Models (One-Step Prediction)", fontweight='bold')
+    plt.ylabel("Step-wise Y-Disp nRMSE", fontweight='bold') # <-- Updated label to be specific
+    
+    # Slight rotation to prevent label overlap
+    plt.xticks(rotation=0, fontsize=10) 
+    
+    # Removed the legend since we only have one quantity now and `hue` is off
+    # plt.legend(...)
+
+    # Final Adjustment and Save
+    plt.tight_layout()
+    plt.savefig(SAVE_FILENAME, dpi=600, bbox_inches='tight')
+    print(f"✅ Success: Plot saved as {SAVE_FILENAME}")
+    plt.show()

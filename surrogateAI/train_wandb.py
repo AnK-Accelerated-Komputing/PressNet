@@ -16,6 +16,8 @@ from utilities import press_eval, common
 from utilities.dataset import TrajectoryDataset
 from models import press_model
 
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+
 device = torch.device('cuda')
 
 def squeeze_data_frame(data_frame):
@@ -35,7 +37,6 @@ def loss_fn(inputs, network_output, model):
     """L2 loss on position."""
     world_pos = inputs['curr_pos'].to(device)
     target_world_pos = inputs['next_pos'].to(device)
-    #world_stress = inputs['curr_stress'].to(device)
     target_stress = inputs['next_stress'].to(device)   ## need to check here
     
     cur_position = world_pos
@@ -149,10 +150,10 @@ def main():
 
     # Define arguments with config file values as defaults (if available)
     parser.add_argument("--train_val_data_path", type=str,
-                        default=config.get("train_val_data_path", "/home/sushil/PressNet/datasets/data/coarse/coarse_1500_train_val.h5"),
+                        default=config.get("train_val_data_path", "/home/sushil/PressNet/datasets/data/Fine/fine_1500_train_val.h5"),
                         help="Path to the training/validation dataset HDF5 file")
     parser.add_argument("--output_dir", type=str,
-                        default=config.get("output_dir", "/home/sushil/PressNet/_NAS_MOUNT/ank-server1/prj_accelerated_physics/prj_pressnet/Training_data_Susil/dilated"),
+                        default=config.get("output_dir", "/home/sushil/PressNet/_Nas_Mount/ank-server1/prj_accelerated_physics/prj_pressnet/Training_data_Susil/mgn"),
                         help="Directory to store output files (checkpoints, logs, rollouts)")
     parser.add_argument("--model_name", type=str,
                         default=config.get("model_name", "dilated_dgcnn"), choices=["gcn", "encode_process_decode","regDGCNN_seg","transolver","dilated_dgcnn"],
@@ -324,8 +325,7 @@ def main():
     patience_counter = 0
     delta = args.delta
     
-    # Eval metric lists (re-initialized each run or restored if you tracked them globally)
-    # Since these were not in the main loss_record pickle in the original code, we keep them local to the run or empty.
+    # Eval metric lists
     mse_losses_pos = []
     mse_losses_stress = []
     l1_losses_pos = []
@@ -334,7 +334,7 @@ def main():
     print(f"Starting training from epoch {start_epoch} to {end_epoch}")
 
     for epoch in range(start_epoch, end_epoch):
-        print(f"Running epoch {epoch+1}")
+        print(f"\n=================== Running epoch {epoch+1} ===================")
         epoch_start_time = time.time()
 
         epoch_training_loss = 0.0
@@ -344,13 +344,24 @@ def main():
         model.train()
         epoch_training_loss_stress = 0.0
         epoch_training_loss_pos = 0.0
-        for data in train_dataloader:
+        
+        for data_idx, data in enumerate(train_dataloader):
+            print(f"\n--- Batch {data_idx+1} ---")
             frame = squeeze_data_frame(data)
+            print(f"1. Data loaded - Memory allocated: {torch.cuda.memory_allocated(device) / 1e6:.2f} MB")
+            
             output = model(frame, is_training=True)
+            print(f"2. Forward pass done - Memory allocated: {torch.cuda.memory_allocated(device) / 1e6:.2f} MB")
+            
             loss, loss_stress, loss_pos = loss_fn(frame, output, model)
+            print(f"3. Loss calculated - Memory allocated: {torch.cuda.memory_allocated(device) / 1e6:.2f} MB")
+            
             optimizer.zero_grad()
             loss.backward()
+            print(f"4. Backward pass done - Memory allocated: {torch.cuda.memory_allocated(device) / 1e6:.2f} MB")
+            
             optimizer.step()
+            print(f"5. Optimizer step done - Memory allocated: {torch.cuda.memory_allocated(device) / 1e6:.2f} MB")
             
             # Detach to save memory and add to lists
             step_training_losses.append(loss.detach().cpu())
@@ -358,7 +369,6 @@ def main():
             epoch_training_loss_stress += loss_stress.detach().cpu()
             epoch_training_loss_pos += loss_pos.detach().cpu()
             num_step += 1
-            # wandb.log({"step_train_loss": loss.item()})
 
         mean_epoch_training_loss = epoch_training_loss / num_step
         epoch_training_losses.append(epoch_training_loss)
@@ -369,8 +379,6 @@ def main():
         epoch_run_times.append(epoch_run_time)
 
         print(f"Epoch {epoch+1} training loss: {epoch_training_loss}, time taken: {time.time() - epoch_start_time}")
-        print(f"[GPU] Allocated: {torch.cuda.memory_allocated() / 1e6:.2f} MB | "
-              f"Reserved: {torch.cuda.memory_reserved() / 1e6:.2f} MB")
         
         # Store training metrics in a dictionary
         log_dict = {
@@ -569,7 +577,6 @@ def main():
     }
     pickle_save(os.path.join(log_dir, 'epoch_run_times.pkl'), epoch_run_times)
     pickle_save(os.path.join(log_dir, 'final_train_loss.pkl'), final_loss_record)
-
 
     model.save_model(os.path.join(checkpoint_dir, "final_model_checkpoint"))
     torch.save(optimizer.state_dict(), os.path.join(checkpoint_dir, "final_optimizer_checkpoint.pth"))

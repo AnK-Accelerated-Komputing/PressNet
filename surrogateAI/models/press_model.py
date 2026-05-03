@@ -54,7 +54,7 @@ class Model(nn.Module):
                 nhid=128,
                 output=params['size'],
                 dropout=0.1,
-                edge_dim=params['edge_dim']  # Assuming edge feature size is 8
+                edge_dim= 8 #params['edge_dim']  # Assuming edge feature size is 8
             )
 
         elif core_model_name == 'regDGCNN_seg':

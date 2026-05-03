@@ -8,7 +8,7 @@ import numpy as np
 import pickle
 
 def save_rollout_frames(rollout_data, save_directory, i=0, key="stress"):
-    skip = 4
+    skip = 6
     
     # --- Handle Dimensions and Squeeze ---
     single_trajectory = rollout_data[i].copy() 
@@ -232,7 +232,7 @@ def save_rollout_frames_stress(rollout_data, save_directory, i=0):
     Animation for STRESS error similar to position error.
     Compares GT stress vs Predicted stress and shows error with fixed legend.
     """
-    skip = 4
+    skip = 6
     
     # --- Handle Dimensions and Squeeze ---
     single_trajectory = rollout_data[i].copy() 
@@ -581,11 +581,11 @@ def animate_rollout(data_path, save_directory, epoch_number, key="stress"):
 
 
 def main():
-    data_path = r"/home/sushil/PressNet/datasetsoutput/encode_process_decode/coarse_1500_train_val/Sun-Jan-25-18-53-48-2026/rollout/rollout_epoch_171.pkl"
-    save_directory = r"/home/sushil/PressNet/datasetsoutput/encode_process_decode/coarse_1500_train_val/Sun-Jan-25-18-53-48-2026/rollout/animation"
+    data_path = r"/home/sushil/PressNet/_Nas_Mount/ank-server1/prj_accelerated_physics/prj_pressnet/Training_data_Susil/transolver/E1_C/Transolver_Slice64/Inference_Output_Retrain/val_real/concatenated_rollout_all.pkl"
+    save_directory = r"/home/sushil/PressNet/_Nas_Mount/ank-server1/prj_accelerated_physics/prj_pressnet/Training_data_Susil/transolver/E1_C/Transolver_Slice64/Inference_Output_Retrain/val_real/animation"
     
     # Extract epoch number from the data path
-    epoch_number = 289  # You can also parse this from the filename
+    epoch_number = "Combined"  # You can also parse this from the filename
     
     os.makedirs(save_directory, exist_ok=True)
     animate_rollout(data_path, save_directory, epoch_number)

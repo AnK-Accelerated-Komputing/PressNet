@@ -1,7 +1,7 @@
 {
-  "train_data_path": "/home/sushil/PressNet/datasets/data/coarse/coarse_1500_train_val.h5",
-  "output_dir": "/home/sushil/PressNet/_NAS_MOUNT/ank-server1/prj_accelerated_physics/prj_pressnet/Training_data_Susil/dilated",
-  "model_name": "dilated_dgcnn",
+  "train_data_path": "/home/sushil/PressNet/datasets/data/Fine/fine_1500_train_val.h5",
+  "output_dir": "/home/sushil/PressNet/_Nas_Mount/ank-server1/prj_accelerated_physics/prj_pressnet/Training_data_Susil/mgn",
+  "model_name": "encode_process_decode",
   "epochs": 1260,
   "learning_rate": 0.0001,
   "batch_size": 1,
@@ -11,15 +11,16 @@
   "eta_min": 0.000001,
   "patience": 100,
   "resume": false,
-  "checkpoint_dir": null,
-  "wandb_project": "Server3_Dilated_C_ST1_K50_D70",
+  "checkpoint_dir": "/home/sushil/PressNet/_Nas_Mount/ank-server1/prj_accelerated_physics/prj_pressnet/Training_data_Susil/transolver/E2_F/transolver/fine_1500_train_val/Wed-Apr--1-17-31-25-2026/checkpoint",
+  "wandb_project": "MGN_messagepassing_worldradius_Fine",
   "shuffle": true,
   "stage": 3,
   "delta": 0.001,
-  "message_passing_steps": 10,
-  "world_radius": 30,
+  "message_passing_steps": 20,
+  "world_radius": 20,
   "slice": 64,
   "edge_dim": 16,
   "k_neighbor": 20,
-  "dilated_k_sample": 250
+  "dilated_k_sample": 100,
+  "wandb_run_id":"85ada2d6"
 }

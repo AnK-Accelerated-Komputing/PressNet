@@ -11,6 +11,7 @@ surrogateAI/wandb
 local
 /local
 surrogateAI/config.json
+surrogateAI/test.py
 datasets/data
 datasets/data_gen_code
 wandb
@@ -19,3 +20,7 @@ wandb
 datasetsoutput
 mlflow.db
 _NAS_MOUNT
+_Nas_Mount
+test.py
+datasets/download.py
+datasets/utilities/download_hugging_face.py

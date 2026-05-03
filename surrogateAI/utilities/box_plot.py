@@ -8,14 +8,15 @@ import os
 # 1. CONFIGURATION
 # ==========================================
 file_map = {
-    "32": "/home/sushil/PressNet/_NAS_MOUNT/ank-server1/prj_accelerated_physics/prj_pressnet/Training_data_Susil/Server6/output/transolver/coarse_1500_train_val/Transolver_C_ST1_Slice16/rollout/evaluation_max_error_val_v3/combined_detailed_summary.json",
-    "64": "/home/sushil/PressNet/datasetsoutput/transolver/coarse_1500_train_val/Transolver_C_ST1_Slice64/rollout/evaluation_max_error_epoch_385/combined_detailed_summary.json",
-    "128": "/home/sushil/PressNet/datasetsoutput/transolver/coarse_1500_train_val/Transolver_C_ST1_Slice64/Transolver_C_ST1_Slice128/summary_1260.json",
+    "Transolver": "/home/sushil/PressNet/_Nas_Mount/ank-server1/prj_accelerated_physics/prj_pressnet/Training_data_Susil/transolver/E1_C/Transolver_Slice64/Combined_Inference_OneStepPrediction/test/rollout_evaluation_max_error/combined_detailed_summary.json",
+    "Dilated": "/home/sushil/PressNet/_Nas_Mount/ank-server1/prj_accelerated_physics/prj_pressnet/Training_data_Susil/dilated/Combined_Inference_K20_D100_onestepprediction/test/rollout_evaluation_max_error/combined_detailed_summary.json",
+    "Reg_DGCNN": "/home/sushil/PressNet/_Nas_Mount/ank-server1/prj_accelerated_physics/prj_pressnet/Training_data_Susil/reg/Coarse_ST1/Inference_Output_OnestepPrediction/test/rollout_evaluation_max_error/combined_detailed_summary.json",
+
     
 }
 
 METRIC_CHOICE = "percent_error" 
-SAVE_FILENAME = "Transolver_Slicewise_ValidationSet.png"
+SAVE_FILENAME = "Model_Comparison_OneStepPrediction_max_error.png"
 
 # ==========================================
 # 2. DATA LOADING & PROCESSING
@@ -117,7 +118,7 @@ else:
     # --- Styling ---
     sns.despine() 
     plt.ylabel(f"{METRIC_CHOICE.replace('_', ' ').title()} [%]", fontweight='bold')
-    plt.xlabel("Transolver_Slice", fontweight='bold')
+    plt.xlabel("Models", fontweight='bold')
     
     # Slight rotation to prevent label overlap
     plt.xticks(rotation=15, fontsize=9) 

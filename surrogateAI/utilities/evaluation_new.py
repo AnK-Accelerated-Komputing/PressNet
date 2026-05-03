@@ -7,6 +7,7 @@ import matplotlib.patches as patches
 import time
 from PIL import Image
 import json
+import mlflow  # --- ADDED MLFLOW IMPORT ---
 
 def load_pkl_file(file_path):
     """ Load the pkl file and return its contents. """
@@ -78,7 +79,7 @@ def obtain_step_loss(single_trajectory):
         rel_rmse_y = loss_y_rmse / deform_range
 
         # --- Append to Lists (Handling Skip Logic for Restart Points) ---
-        if i == 99 or i == 199:
+        if i == 199 or i == 299:
             # Repeat last value for continuity at restart points
             for d in [gt, pred, step_loss]:
                 for k in d.keys():
@@ -165,8 +166,6 @@ def obtain_domain_wise_loss(single_trajectory):
             continue
 
         # Calculate Y-Deformation (Absolute displacement from mesh pos)
-        # Note: Depending on your model, deformation might be pure displacement or absolute position.
-        # Here we calculate absolute deformation magnitude in Y.
         filtered_gt_deform_y = torch.abs((filtered_gt_pos - filtered_mesh_pos)[:, 1])
         filtered_pred_deform_y = torch.abs((filtered_pred_pos - filtered_mesh_pos)[:, 1])
 
@@ -235,6 +234,11 @@ def plot_step_loss_gif(step_loss, gt, pred, output_dir, key='all'):
             if step == steps[-1]:
                 final_filename = os.path.join(output_dir, key, f"frame_{step:03d}.png")
                 plt.savefig(final_filename)
+                
+                # --- MLFLOW ARTIFACT LOGGING: Save final graph ---
+                if mlflow.active_run():
+                    traj_id = os.path.basename(output_dir)
+                    mlflow.log_artifact(final_filename, artifact_path=f"evaluation_plots/traj_{traj_id}/step_loss/{key}")
 
             plt.close()
         
@@ -251,6 +255,11 @@ def plot_step_loss_gif(step_loss, gt, pred, output_dir, key='all'):
             fps = 50
             frames[0].save(gif_filename, save_all=True, append_images=frames[1:], duration=int(1000/fps), loop=0)
             print(f"GIF saved as {gif_filename}")
+
+            # --- MLFLOW ARTIFACT LOGGING: Save generated GIF ---
+            if mlflow.active_run():
+                traj_id = os.path.basename(output_dir)
+                mlflow.log_artifact(gif_filename, artifact_path=f"evaluation_plots/traj_{traj_id}/step_loss/{key}")
 
 def plot_domain_wise_loss(x_ranges, results, output_dir, key='all'):
     # Calculate midpoints for plotting on a continuous axis
@@ -302,41 +311,30 @@ def plot_domain_wise_loss(x_ranges, results, output_dir, key='all'):
         plt.figure(figsize=(10, 6))
         
         # 1. Plot GT and Pred Lines
-        # We use the midpoints (x_range_labels) as the x-coordinates
         plt.plot(x_range_labels, gt_vals, color='g', marker='o', linewidth=2, label=f'GT {p_key}')
         plt.plot(x_range_labels, pred_vals, color='b', marker='o', linewidth=2, label=f'Pred {p_key}')
         
         # 2. Plot Error Bars (Histogram)
-        # width=20 matches your discrete_size
         bars = plt.bar(x_range_labels, errors, width=20, color=colors, edgecolor='black', align='center', alpha=0.7, label='Error Mag')
         
         # 3. Plot Error Trend Line
-        # Matches the height of the bars
         plt.plot(x_range_labels, errors, color='r', marker='o', linewidth=2, label='Error Trend')
-
-        # --- REMOVED THE STRIP (patches.Rectangle) HERE ---
 
         plt.xlabel('X-coordinate', fontsize=14)
         plt.ylabel('Value / Error', fontsize=14)
         plt.title(f'{p_key} across Domain', fontsize=16)
         
-        # --- IMPROVED X-AXIS ---
-        # Instead of forcing every label, we let matplotlib handle the numeric ticks.
-        # This creates a clean "line-wise" axis.
         plt.tick_params(axis='x', which='major', labelsize=10)
         plt.grid(axis='both', linestyle='--', alpha=0.5)
         
         # Dynamic Y-Limits
-        # Calculate min and max to ensure everything fits without the hardcoded -25 floor
         all_values = gt_vals + pred_vals + errors
         y_min = min(all_values)
         y_max = max(all_values)
         
-        # Add some padding (10%)
         padding = (y_max - y_min) * 0.1 if y_max != y_min else 1.0
         plt.ylim(y_min - padding, y_max + padding)
         
-        # Ensure X-limits cover the full range
         if x_range_labels:
             plt.xlim(min(x_range_labels) - 30, max(x_range_labels) + 30)
         
@@ -348,6 +346,11 @@ def plot_domain_wise_loss(x_ranges, results, output_dir, key='all'):
         plt.savefig(filename)
         plt.close()
         print(f"Plot saved at {filename}")
+
+        # --- MLFLOW ARTIFACT LOGGING: Save Domain Wise Plot ---
+        if mlflow.active_run():
+            traj_id = os.path.basename(output_dir)
+            mlflow.log_artifact(filename, artifact_path=f"evaluation_plots/traj_{traj_id}/domain_wise/{p_key}")
 
 def evaluate_rollout(rollout_pth, base_output_dir, plot=True):
     print(f"Rollout Evaluation for {rollout_pth}")
@@ -450,6 +453,11 @@ def evaluate_rollout(rollout_pth, base_output_dir, plot=True):
             json.dump(info, file, indent=4)
             
         print("Appended metrics to JSON.")
+        
+        # --- MLFLOW ARTIFACT LOGGING: Save the JSON file containing all metadata info ---
+        if mlflow.active_run():
+            mlflow.log_artifact(json_file_path, artifact_path="evaluation_metrics")
+            
         end_time = time.time()
         print(f"Time taken: {end_time - start_time:.2f}s")
 
@@ -457,12 +465,19 @@ def evaluate_rollout(rollout_pth, base_output_dir, plot=True):
 
 def main():
     # Update these paths to your actual file locations
-    base_dir = "/home/sushil/PressNet/datasetsoutput/transolver/coarse_1500_train_val/Wed-Jan-21-18-49-39-2026/rollout"
-    rollout_pth = os.path.join(base_dir, 'rollout_epoch_385.pkl')
+    base_dir = "/home/sushil/PressNet/datasetsoutput/encode_process_decode/coarse_1500_train_val/MGN_C_ST1_MP3_WR20/rollout"
+    rollout_pth = os.path.join(base_dir, 'rollout_epoch_171.pkl')
     output_dir = os.path.join(base_dir, 'rollout_evaluation')
     
-    # Set plot=True to generate GIFs and graphs
-    evaluate_rollout(rollout_pth, output_dir, plot=True)
+    # --- MLFLOW SETUP FOR STANDALONE RUNS ---
+    # Setup MLflow here so that standalone execution also successfully logs metrics
+    mlflow.set_tracking_uri("home/sushil/PressNet/_NAS_MOUNT/ank-server1/prj_accelerated_physics/prj_pressnet/mlruns")
+    mlflow.set_experiment("Standalone_Evaluation")
+    
+    # Start the MLflow run context
+    with mlflow.start_run(run_name="MGN_C_ST1_MP3_WR20_Eval_Epoch_171"):
+        # Set plot=True to generate GIFs and graphs
+        evaluate_rollout(rollout_pth, output_dir, plot=True)
 
 if __name__ == "__main__":
     main()

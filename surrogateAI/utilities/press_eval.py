@@ -38,7 +38,11 @@ def _rollout(model, initial_state, num_steps, target_world_pos):
     cur_positions = []
     cur_velocities = []
     for step in range(num_steps):
+        # 1. Catch the prediction in '_' instead of 'cur_pos' so it doesn't overwrite our input
         cur_pos, trajectory, stress_trajectory, cur_positions, cur_velocities = step_fn(cur_pos, trajectory,stress_trajectory, cur_positions, cur_velocities, target_world_pos[step])
+        
+        # 2. Manually overwrite cur_pos with the Ground Truth for the next step!
+        #cur_pos = target_world_pos[step]
     return (torch.stack(trajectory), torch.stack(cur_positions), torch.stack(cur_velocities), torch.stack(stress_trajectory))
 
 def evaluate(model, trajectory, num_steps=None):

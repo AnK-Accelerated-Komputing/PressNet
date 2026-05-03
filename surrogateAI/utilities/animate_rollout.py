@@ -325,8 +325,8 @@ def animate_rollout(data_path, save_directory, epoch_number, skip=10):
     return True
 
 if __name__ == '__main__':
-    data_path = r"/home/sushil/PressNet/_NAS_MOUNT/ank-server1/prj_accelerated_physics/prj_pressnet/Training_data_Susil/server5/output/regDGCNN_seg/coarse_1500_train_val/DGCNN_C_ST1_K20/rollout/infer_rollout.pkl"
-    save_directory = r"/home/sushil/PressNet/_NAS_MOUNT/ank-server1/prj_accelerated_physics/prj_pressnet/Training_data_Susil/server5/output/regDGCNN_seg/coarse_1500_train_val/DGCNN_C_ST1_K20/animation"
+    data_path = r"/home/sushil/PressNet/_NAS_MOUNT/ank-server1/prj_accelerated_physics/prj_pressnet/Training_data_Susil/reg/Coarse_ST1/regDGCNN_seg/coarse_1500_train_val/DGCNN_C_ST1_K80(Retrain)/rollout/rollout_epoch_940.pkl"
+    save_directory = r"/home/sushil/PressNet/_NAS_MOUNT/ank-server1/prj_accelerated_physics/prj_pressnet/Training_data_Susil/reg/Coarse_ST1/regDGCNN_seg/coarse_1500_train_val/DGCNN_C_ST1_K80(Retrain)/animation"
     epoch_number = "840" 
     os.makedirs(save_directory, exist_ok=True)
     animate_rollout(data_path, save_directory, epoch_number, skip=4)

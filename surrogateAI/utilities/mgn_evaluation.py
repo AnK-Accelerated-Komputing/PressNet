@@ -60,7 +60,7 @@ def obtain_step_loss(single_trajectory,loss='rmse'):
         gt_y_deform = torch.abs((gt_pos-mesh_pos)[:,1].flatten())
         pred_y_deform = torch.abs((pred_pos-mesh_pos)[:,1].flatten())
         
-        if i == 99 or i == 199:
+        if i == 199 or i == 199:
             gt["deform_y"].append(gt["deform_y"][-1])
             gt["max_deform_y"].append(gt["max_deform_y"][-1])
         else:
@@ -78,7 +78,7 @@ def obtain_step_loss(single_trajectory,loss='rmse'):
             
             loss_y_deform = torch.sqrt(torch.mean((gt_y_deform - pred_y_deform) ** 2))
             loss_y_deform_max = torch.sqrt((torch.max(gt_y_deform) - torch.max(pred_y_deform))**2)
-        if i == 99 or i == 198:
+        if i == 199 or i == 198:
             step_loss["deform_y"].append(step_loss["deform_y"][-1])
             step_loss["max_deform_y"].append(step_loss["max_deform_y"][-1])
         else:

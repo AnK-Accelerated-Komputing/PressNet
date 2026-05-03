@@ -21,9 +21,9 @@ PARAMETERS = {
         size=4,             # Changed from 3 to 4 to match training input
         model=press_model,
         evaluator=press_eval,
-        k_neighbor=50,      # Added: Required for graph construction
+        k_neighbor=20,      # Added: Required for graph construction
         dilated_k_sample=100, # Added: Required for graph construction
-        message_passing_steps=10,
+        message_passing_steps=20,
         world_radius=30,
         slice=64,
         edge_dim=8
@@ -39,18 +39,29 @@ def save_rollout(rollout_path, trajectories, disp=""):
 def load_model(inference_config, params, checkpoint_dir):
     """Load the model from a checkpoint."""
     
-    # --- 2. FIXED: Initialization signature matches training ---
+    # --- FIXED: Initialization signature matches training ---
     model = params['model'].Model(
         params, 
         core_model_name=inference_config['core_model']
     )
     
-    # Check if we are pointing to the parent folder or the specific best_checkpoint folder
-    # Based on your previous code, the file is inside "best_checkpoint"
-    if "best_checkpoint" not in checkpoint_dir and os.path.exists(os.path.join(checkpoint_dir, "best_checkpoint")):
-        load_path = os.path.join(checkpoint_dir, "best_checkpoint", 'best_model_checkpoint')
+    # 1. Check if the directory itself contains "best" files
+    if os.path.exists(os.path.join(checkpoint_dir, "best_model_checkpoint_learned_model.pth")):
+        prefix = "best_model_checkpoint"
+        load_path = os.path.join(checkpoint_dir, prefix)
+        
+    # 2. Check if the directory itself contains "epoch" files
+    elif os.path.exists(os.path.join(checkpoint_dir, "epoch_model_checkpoint_learned_model.pth")):
+        prefix = "epoch_model_checkpoint"
+        load_path = os.path.join(checkpoint_dir, prefix)
+        
+    # 3. Fallback: If pointing to a parent directory that contains a "best_checkpoint" folder
+    elif os.path.exists(os.path.join(checkpoint_dir, "best_checkpoint", "best_model_checkpoint_learned_model.pth")):
+        prefix = "best_model_checkpoint"
+        load_path = os.path.join(checkpoint_dir, "best_checkpoint", prefix)
+        
     else:
-        load_path = os.path.join(checkpoint_dir, 'best_model_checkpoint')
+        raise FileNotFoundError(f"Could not find valid 'best' or 'epoch' checkpoint files in {checkpoint_dir}")
 
     print(f"Loading weights from: {load_path}")
     model.load_model(load_path)
@@ -81,12 +92,12 @@ def inference(checkpoint_dir, val_dir, rollout_dir):
     # Inference configuration
     inference_config = {
         "model": "press",
-        "core_model": "transolver", # Ensure this matches the trained model type
+        "core_model": "encode_process_decode", # Ensure this matches the trained model type
     }
 
     # Load dataset
     # Note: Ensure your dataset supports split='test'. If not, change to 'val'.
-    val_dataset = TrajectoryDataset(val_dir, split='test', stage=1)
+    val_dataset = TrajectoryDataset(val_dir, split='test', stage=4)
     val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False)
     
     params = PARAMETERS[inference_config['model']]
@@ -119,14 +130,24 @@ def inference(checkpoint_dir, val_dir, rollout_dir):
             else:
                 info['file_name'].append(f"sample_{idx}")
             
-            start_time = time.time()
+            # --- START ACCURATE GPU TIMER ---
+            if device.type == 'cuda': torch.cuda.synchronize()
+            start_time = time.perf_counter()
+            
             _, prediction_trajectory = press_eval.evaluate(model, data)
-            end_time = time.time()
+            
+            # --- STOP ACCURATE GPU TIMER ---
+            if device.type == 'cuda': torch.cuda.synchronize()
+            infer_time = time.perf_counter() - start_time
 
             trajectories.append(prediction_trajectory)
-            info['inference_time'].append(end_time - start_time)
+            info['inference_time'].append(infer_time)
 
-            print(f"Processed sample {idx} in {end_time - start_time:.2f}s")
+            print(f"Processed sample {idx} in {infer_time:.4f}s ({infer_time*1000:.2f}ms)")
+            
+    # Calculate and print the overall average time
+    avg_time = sum(info['inference_time']) / len(info['inference_time']) if info['inference_time'] else 0
+    print(f"\n✓ Inference Complete! Average execution time per sample: {avg_time:.4f}s ({avg_time*1000:.2f}ms)")
 
     # Save predictions
     rollout_file = Path(rollout_dir) / "infer_rollout.pkl"
@@ -138,11 +159,11 @@ def inference(checkpoint_dir, val_dir, rollout_dir):
 def main():
     # Define directories
     # Ensure this points to the folder containing 'best_checkpoint' or the checkpoint itself
-    checkpoint_dir = r"/home/sushil/PressNet/datasetsoutput/transolver/coarse_1500_train_val/Transolver_C_ST1_Slice64/checkpoint"
+    checkpoint_dir = r"/home/sushil/PressNet/_Nas_Mount/ank-server1/prj_accelerated_physics/prj_pressnet/Training_data_Susil/mgn/MGN_Monolithic/checkpoint/epoch_180"
     
-    val_dir = r"/home/sushil/PressNet/datasets/data/coarse/coarse_1500_train_val.h5"
+    val_dir = r"/home/sushil/PressNet/_Nas_Mount/ank-server1/prj_accelerated_physics/prj_pressnet/00_data/Splitdata/Coarse/coarse_1500_ranges.h5"
 
-    rollout_dir = r"/home/sushil/PressNet/datasetsoutput/transolver/coarse_1500_train_val/infer_rollout"
+    rollout_dir = r"/home/sushil/PressNet/_Nas_Mount/ank-server1/prj_accelerated_physics/prj_pressnet/Training_data_Susil/mgn/MGN_Monolithic/infer_unseen_rollout_180"
     # Run inference
     inference(checkpoint_dir, val_dir, rollout_dir)
 
