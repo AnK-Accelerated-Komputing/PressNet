@@ -1,0 +1,183 @@
+import torch
+from torch.utils.data import Dataset
+import json
+import h5py
+import os
+import numpy as np
+import random
+
+class TrajectoryDataset(Dataset):
+    def __init__(self, data_path, split='train', stage=None):
+        self.data_path = data_path
+        self.split = split
+        self.stage = stage
+        self.skip = 3  # <--- Renamed from stride. Skips 3 steps (1 -> 4 -> 7...)
+        
+        self.is_processed = self._is_processed()
+
+        if not self.is_processed:
+            self.process_data()
+        self.data = self.load_data()
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        return self.data[idx]
+
+    def _is_processed(self):
+        # Checks for processed file. 
+        # Ideally, if you change 'skip', you should delete old .pt files to force re-processing.
+        return os.path.exists(self.data_path.replace('.h5', f'_{self.split}_{self.stage}.pt'))
+
+    def process_data(self):
+        print(f"Processing data for split: {self.split} with skip: {self.skip}...")
+        base_folder = os.path.dirname(self.data_path)
+        
+        # Determine meta file name
+        data_name = os.path.basename(self.data_path).replace('.h5', '')
+        meta_file = os.path.join(base_folder, f'{data_name}_meta.json')
+        
+        if not os.path.exists(meta_file):
+            raise FileNotFoundError(f"Meta file not found: {meta_file}")
+
+        with open(meta_file, 'r') as f:
+            meta_data = json.load(f)
+
+        final_data = []
+        with h5py.File(self.data_path, 'r') as h5_file:
+            group_names = list(h5_file.keys())
+            
+            random.seed(42)   
+            random.shuffle(group_names)
+            total_groups = len(group_names)
+            
+            # --- SPLIT LOGIC ---
+            if self.split == 'test':
+                selected_groups = group_names
+                print(f"Test split: {len(selected_groups)} groups.")
+            elif self.split == 'train':
+                group_limit = round(total_groups * 0.7)
+                selected_groups = group_names[:group_limit]
+                print(f"Train split: {len(selected_groups)} groups.")
+            elif self.split == 'val':
+                group_limit = round(total_groups * 0.7)
+                selected_groups = group_names[group_limit:]
+                print(f"Val split: {len(selected_groups)} groups.")
+            # -------------------
+
+            for group_name in selected_groups:
+                group = h5_file[group_name]
+                meta_info = meta_data[group_name]
+                total_steps = meta_info['number of steps'] 
+
+                # --- STAGE LOGIC ---
+                if self.stage == 1:
+                    start_step = 1
+                    end_step = total_steps // 3
+                elif self.stage == 2:
+                    start_step = total_steps // 3 + 1
+                    end_step = 2 * (total_steps // 3)
+                elif self.stage == 3:
+                    start_step = 2 * (total_steps // 3) + 1
+                    # Ensure we don't go out of bounds when looking for (step + skip)
+                    end_step = total_steps - self.skip 
+                else:
+                    start_step = 1
+                    end_step = total_steps - self.skip
+
+                # Common static data
+                cells = torch.tensor(group['cells'][:])
+                mesh_pos = torch.tensor(group['mesh_pos'][:])
+                node_type = torch.tensor(group['node_type'][:])
+
+                # --- PROCESSING WITH SKIP ---
+                if self.split == 'train':
+                    # range(start, end, skip) handles the jumping
+                    for step_num in range(start_step, end_step + 1, self.skip):
+                        step_key = f'step_{step_num}'
+                        # Target is current step + skip
+                        next_step_key = f'step_{step_num + self.skip}'
+
+                        if step_key in group:
+                            step_group = group[step_key]
+                            curr_pos = torch.tensor(step_group['world_pos'][:])
+
+                            if next_step_key in group:
+                                next_step_group = group[next_step_key]
+                                next_pos = torch.tensor(next_step_group['world_pos'][:])
+                                next_stress = torch.tensor(next_step_group['stress'][:])
+                            else:
+                                continue 
+
+                            step_data = {
+                                'cells': cells,
+                                'mesh_pos': mesh_pos,
+                                'node_type': node_type,
+                                'curr_pos': curr_pos,
+                                'next_pos': next_pos,
+                                'next_stress': next_stress
+                            }
+                            final_data.append(step_data)
+
+                else:
+                    # Val/Test: Accumulate trajectories
+                    curr_pos_list = []
+                    next_pos_list = []
+                    next_stress_list = []
+
+                    for step_num in range(start_step, end_step + 1, self.skip):
+                        step_key = f'step_{step_num}'
+                        next_step_key = f'step_{step_num + self.skip}'
+
+                        if step_key in group and next_step_key in group:
+                            step_group = group[step_key]
+                            next_step_group = group[next_step_key]
+
+                            curr_pos_list.append(torch.tensor(step_group['world_pos'][:]))
+
+                        if next_step_key in group:
+                            next_step_group = group[next_step_key]
+                            next_pos_list.append(torch.tensor(next_step_group['world_pos'][:]))
+                            next_stress_list.append(torch.tensor(next_step_group['stress'][:]))
+
+                    # Convert lists to tensors
+                    curr_pos_tensor = torch.stack(curr_pos_list) if curr_pos_list else torch.empty(0)
+                    next_pos_tensor = torch.stack(next_pos_list) if next_pos_list else torch.empty(0)
+                    next_stress_tensor = torch.stack(next_stress_list) if next_stress_list else torch.empty(0)
+
+                    grouped_data = {
+                        'cells': cells.expand(curr_pos_tensor.size(0), -1, -1),  # (steps, num_cells, 3)
+                        'mesh_pos': mesh_pos.expand(curr_pos_tensor.size(0), -1, -1),  # (steps, num_nodes, 3)
+                        'node_type': node_type.expand(curr_pos_tensor.size(0),-1, -1),  # (steps, num_nodes,1)
+                        'curr_pos': curr_pos_tensor,
+                        'next_pos': next_pos_tensor,
+                        'next_stress': next_stress_tensor
+                    }
+
+                    final_data.append(grouped_data)
+
+        # Save
+        torch.save(final_data, self.data_path.replace('.h5', f'_{self.split}_{self.stage}.pt'))
+        print(f"Saved processed data to: {self.data_path.replace('.h5', f'_{self.split}_{self.stage}.pt')}")
+
+    def load_data(self):
+        return torch.load(self.data_path.replace('.h5', f'_{self.split}_{self.stage}.pt'))
+
+
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Build the cached .pt files for a split/stage and print tensor shapes")
+    parser.add_argument("--data", required=True, help="HDF5 file (with *_meta.json next to it)")
+    parser.add_argument("--split", default="train", choices=["train", "val", "test"])
+    parser.add_argument("--stage", type=int, default=1, choices=[1, 2, 3, 4])
+    args = parser.parse_args()
+
+    dataset = TrajectoryDataset(args.data, split=args.split, stage=args.stage)
+    print(f"{len(dataset)} samples")
+    for key, value in dataset[0].items():
+        print(key, tuple(value.shape))
+
+
+if __name__ == '__main__':
+    main()

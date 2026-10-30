@@ -1,0 +1,19 @@
+__pycache__/
+*.pyc
+*.egg-info/
+*.so
+build/
+.vscode/
+.idea/
+wandb/
+mlruns/
+outputs/
+
+# data and weights are distributed through the download links, not git
+datasets/data/
+*.h5
+*.pt
+*.pth
+*.pkl
+checkpoints/**/*
+!checkpoints/README.md

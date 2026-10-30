@@ -1,0 +1,8 @@
+{
+  "core_model": "gcn",
+  "checkpoints": {
+    "stage_1": "../checkpoints/fine/gcn/stage1",
+    "stage_2": "../checkpoints/fine/gcn/stage2",
+    "stage_3": "../checkpoints/fine/gcn/stage3"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "core_model": "regDGCNN_seg",
+  "checkpoints": {
+    "stage_1": "../checkpoints/coarse/reg_dgcnn/stage1",
+    "stage_2": "../checkpoints/coarse/reg_dgcnn/stage2",
+    "stage_3": "../checkpoints/coarse/reg_dgcnn/stage3"
+  }
+}

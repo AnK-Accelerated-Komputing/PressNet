@@ -1,0 +1,16 @@
+torch-geometric
+numpy
+scipy
+pandas
+h5py
+matplotlib
+seaborn
+plotly
+kaleido
+pillow
+einops
+timm
+trimesh
+meshio
+pyvista
+wandb

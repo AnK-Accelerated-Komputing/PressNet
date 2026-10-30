@@ -1,0 +1,8 @@
+{
+  "core_model": "transolver",
+  "checkpoints": {
+    "stage_1": "../checkpoints/fine/transolver/stage1",
+    "stage_2": "../checkpoints/fine/transolver/stage2",
+    "stage_3": "../checkpoints/fine/transolver/stage3"
+  }
+}

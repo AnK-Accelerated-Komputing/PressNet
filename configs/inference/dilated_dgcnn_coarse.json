@@ -1,0 +1,8 @@
+{
+  "core_model": "dilated_dgcnn",
+  "checkpoints": {
+    "stage_1": "../checkpoints/coarse/dilated_dgcnn/stage1",
+    "stage_2": "../checkpoints/coarse/dilated_dgcnn/stage2",
+    "stage_3": "../checkpoints/coarse/dilated_dgcnn/stage3"
+  }
+}

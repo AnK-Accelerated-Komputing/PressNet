@@ -1,0 +1,16 @@
+name: pressnet_pp
+channels:
+  - pytorch
+  - nvidia
+  - pyg
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pytorch
+  - torchvision
+  - pytorch-cuda=12.1
+  - pytorch-scatter
+  - pip
+  - pip:
+      - -r requirements.txt

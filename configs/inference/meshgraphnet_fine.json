@@ -1,0 +1,8 @@
+{
+  "core_model": "encode_process_decode",
+  "checkpoints": {
+    "stage_1": "../checkpoints/fine/meshgraphnet/stage1",
+    "stage_2": "../checkpoints/fine/meshgraphnet/stage2",
+    "stage_3": "../checkpoints/fine/meshgraphnet/stage3"
+  }
+}

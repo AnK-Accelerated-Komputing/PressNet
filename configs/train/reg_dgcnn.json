@@ -1,0 +1,20 @@
+{
+  "model_name": "regDGCNN_seg",
+  "train_val_data_path": "../datasets/data/coarse/coarse_1500_train_val.h5",
+  "output_dir": "../outputs",
+  "epochs": 1260,
+  "learning_rate": 0.0001,
+  "batch_size": 1,
+  "scheduler_type": "CosineAnnealingWarmRestarts",
+  "T_0": 20,
+  "T_mult": 2,
+  "eta_min": 1e-06,
+  "patience": 100,
+  "delta": 0.001,
+  "shuffle": true,
+  "resume": false,
+  "use_wandb": false,
+  "wandb_project": "pressnet-plusplus",
+  "stage": 1,
+  "k_neighbor": 80
+}
