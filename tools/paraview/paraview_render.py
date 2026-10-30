@@ -811,18 +811,24 @@ def parse_args():
     p.add_argument("--num-shards", type=int, default=1)
     p.add_argument("--scan-only", action="store_true")
     p.add_argument("--vtu-root", default=None, help="Folder written by convert_pkls_to_vtu.py")
+    p.add_argument("--models", nargs="*", default=None, help="Only render these model labels")
+    p.add_argument("--skip", type=int, default=None, help="Render every SKIP-th frame (default 10)")
     p.add_argument("--out-root", default=None, help="Folder that receives the rendered figures")
     args, _ = p.parse_known_args()
     return args
 
 
 def main():
-    global VTU_ROOT, OUTPUT_ROOT
+    global VTU_ROOT, OUTPUT_ROOT, MODELS, SKIP
     args = parse_args()
     if args.vtu_root:
         VTU_ROOT = args.vtu_root
     if args.out_root:
         OUTPUT_ROOT = args.out_root
+    if args.models:
+        MODELS = args.models
+    if args.skip:
+        SKIP = args.skip
     os.makedirs(OUTPUT_ROOT, exist_ok=True)
     paraview.simple._DisableFirstRenderCameraReset()
 

@@ -325,14 +325,19 @@ def convert_one(model_name, pkl_path):
 
 def main():
     import argparse
-    global OUTPUT_VTU_ROOT
+    global OUTPUT_VTU_ROOT, SAMPLE_INDEX, DT
     parser = argparse.ArgumentParser(description="Convert rollout pickles to VTU/PVD time series for ParaView")
     parser.add_argument("--model", action="append", required=True, metavar="NAME=PKL",
                         help="Label and rollout pickle, e.g. Transolver=out/concatenated_rollout_all.pkl (repeatable)")
     parser.add_argument("--out", default=OUTPUT_VTU_ROOT, help="Folder that receives one sub-folder per model")
+    parser.add_argument("--samples", nargs="+", default=["all"],
+                        help="Trajectory indices to export, or 'all'")
+    parser.add_argument("--dt", type=float, default=None, help="Seconds per stored frame (default: frame index)")
     args = parser.parse_args()
 
     OUTPUT_VTU_ROOT = args.out
+    SAMPLE_INDEX = "all" if args.samples == ["all"] else [int(x) for x in args.samples]
+    DT = args.dt
     for item in args.model:
         name, _, path = item.partition("=")
         if not path:
