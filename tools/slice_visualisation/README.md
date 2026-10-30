@@ -108,7 +108,7 @@ alone and runs anywhere.
 ```bash
 # 1. capture the memberships. Prints the plan first with --dry-run.
 python slice_visualisation.py export --dry-run
-python slice_visualisation.py export --td <training_dir> --repo <repo> --out slices
+python slice_visualisation.py export --press-ckpt ../../checkpoints/coarse/transolver/stage1 \n    --dwell-ckpt ../../checkpoints/coarse/transolver/stage2 --release-ckpt ../../checkpoints/coarse/transolver/stage3 \n    --rollout ../../outputs/transolver_coarse/val/concatenated_rollout_all.pkl --out slices
 
 # 2. score every block and head, and see which one the criterion picks
 python slice_visualisation.py select --src slices
@@ -180,10 +180,8 @@ At the top of the file:
 
 | name | meaning |
 |---|---|
-| `TD`, `REPO` | training data root and the repository holding `models/transolver.py`. Also settable through `SLICE_TD` and `SLICE_REPO`, or on the command line. |
-| `STAGE_CKPT` | stage to checkpoint directory, relative to `TD` |
-| `GEOM_PKL` | the rollout file the figures are taken from |
-| `TIMES` | the timesteps sampled in each stage |
+| `REPO` | folder holding `models/transolver.py`; defaults to `../../surrogateAI`, override with `--repo`. Checkpoints and the rollout are always passed on the command line. |
+| | `TIMES` | the timesteps sampled in each stage |
 | `DT`, `STRIDE`, `STAGE_STEPS` | timing: seconds per step, rollout storage stride, and which steps belong to which stage |
 | `FLAT_MM` | travel below which material counts as stationary |
 | `MIN_RANGE_MM` | travel spread below which a frame has no physics to explain and is excluded from scoring |

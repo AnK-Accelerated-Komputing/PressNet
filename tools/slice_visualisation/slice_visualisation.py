@@ -89,7 +89,7 @@ figure shows.
 USAGE
 =====
     # where the model and checkpoints live
-    python slice_visualisation.py export  --td <training_dir> --repo <repo> --out <npz_dir>
+    python slice_visualisation.py export  --press-ckpt <dir> --dwell-ckpt <dir> --release-ckpt <dir> \n                                          --rollout <concatenated_rollout_all.pkl> --out <npz_dir>
     python slice_visualisation.py export  --dry-run
 
     # anywhere, from the .npz files
@@ -120,21 +120,10 @@ import numpy as np
 # configuration. Adjust the paths for the machine this runs on.
 # ---------------------------------------------------------------------------
 
-TD = os.environ.get('SLICE_TD', '.')            # training data root
-REPO = os.environ.get('SLICE_REPO', '.')        # repo holding models/transolver.py
+# models/transolver.py lives in <repo>/surrogateAI; found automatically from this file's location
+REPO = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'surrogateAI')
 OUT_NPZ = 'learned_slices'
 OUT_PNG = os.path.join('figures', 'slices')
-
-# stage -> checkpoint directory, relative to TD. One separately trained model per
-# stage of the forming cycle.
-STAGE_CKPT = [
-    ('press',   'transolver/E1_C/Transolver_Slice64/Transolver_C_ST1_Slice64'),
-    ('dwell',   'transolver/E1_C/Transolver_Slice64/Transolver_C_ST2_Sl64'),
-    ('release', 'transolver/E1_C/Transolver_Slice64/Transolver_C_ST3_64'),
-]
-# the rollout used for the figures
-GEOM_PKL = ('transolver/E1_C/Transolver_Slice64/Inference_Output_Retrain/'
-            'val_real/concatenated_rollout_all.pkl')
 
 OBSTACLE_NODE_TYPE = 1     # node_type value marking tool nodes
 DT = 0.01                  # seconds per simulation step
@@ -205,7 +194,19 @@ def force_cpu_unpickling():
 
 
 def pick_snapshot(ckpt_dir):
-    """Prefer a best-validation snapshot; fall back in a stated order."""
+    """Prefer a best-validation snapshot; fall back in a stated order.
+
+    `ckpt_dir` may be the folder holding the *_learned_model.pth files, a run's
+    `checkpoint/` folder (its `best_checkpoint/` is searched first), or a parent of
+    `best_checkpoint/`."""
+    for sub in ('', 'best_checkpoint', os.path.join('checkpoint', 'best_checkpoint'), 'checkpoint'):
+        path, pref = _pick_in(os.path.join(ckpt_dir, sub))
+        if path:
+            return path, pref
+    return None, None
+
+
+def _pick_in(ckpt_dir):
     for pref in ('best_model_checkpoint', 'epoch_model_checkpoint',
                  'model_checkpoint', 'final_model_checkpoint'):
         p = os.path.join(ckpt_dir, pref + '_learned_model.pth')
@@ -305,7 +306,10 @@ def cmd_export(args):
             plan.append((stage, t, frame_of(t)))
 
     banner('%s  export  %d frames' % (VERSION, len(plan)))
-    log('  training dir : %s' % args.td)
+    log('  press ckpt   : %s' % args.press_ckpt)
+    log('  dwell ckpt   : %s' % args.dwell_ckpt)
+    log('  release ckpt : %s' % args.release_ckpt)
+    log('  rollout      : %s' % args.rollout)
     log('  repository   : %s' % args.repo)
     log('  output       : %s' % args.out)
     log('')
@@ -324,8 +328,8 @@ def cmd_export(args):
     if device == 'cpu':
         force_cpu_unpickling()
 
-    rel = dict(STAGE_CKPT)
-    geom = os.path.join(args.td, GEOM_PKL)
+    ckpts = {'press': args.press_ckpt, 'dwell': args.dwell_ckpt, 'release': args.release_ckpt}
+    geom = args.rollout
     written, summary = [], []
 
     for stage in STAGES:
@@ -333,12 +337,12 @@ def cmd_export(args):
         if not frames:
             continue
         banner('%s  %d frames' % (stage.upper(), len(frames)))
-        ckdir = os.path.join(args.td, rel[stage], 'checkpoint')
+        ckdir = ckpts[stage]
         path, pref = pick_snapshot(ckdir)
         if path is None:
             log('  no snapshot in %s, stage skipped' % ckdir)
             continue
-        log('  checkpoint %s' % rel[stage])
+        log('  checkpoint %s' % ckdir)
         log('  snapshot   %s' % pref)
         model = torch.load(path, map_location=device, weights_only=False)
         model.eval()
@@ -793,8 +797,12 @@ def main():
     sub = ap.add_subparsers(dest='cmd', required=True)
 
     e = sub.add_parser('export', help='capture slice memberships from a checkpoint')
-    e.add_argument('--td', default=TD, help='training data root')
-    e.add_argument('--repo', default=REPO, help='repo holding models/transolver.py')
+    e.add_argument('--press-ckpt', required=True, help='checkpoint folder of the press (stage 1) Transolver')
+    e.add_argument('--dwell-ckpt', required=True, help='checkpoint folder of the dwell (stage 2) Transolver')
+    e.add_argument('--release-ckpt', required=True, help='checkpoint folder of the release (stage 3) Transolver')
+    e.add_argument('--rollout', required=True,
+                   help='concatenated_rollout_all.pkl from inference.py (geometry for the figures)')
+    e.add_argument('--repo', default=REPO, help='folder holding models/transolver.py (default: ../../surrogateAI)')
     e.add_argument('--out', default=OUT_NPZ)
     e.add_argument('--traj', type=int, default=0)
     e.add_argument('--cpu', action='store_true')
