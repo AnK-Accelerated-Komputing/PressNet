@@ -101,14 +101,16 @@ figure actually shows.
 
 ## Usage
 
-Set the paths at the top of the file, or pass them on the command line. `export`
-needs the model and the checkpoints; everything else works from the `.npz` files
+Everything is passed on the command line: no paths are hard-coded. `export`
+needs the three stage checkpoints and a rollout pickle (`concatenated_rollout_all.pkl` from `surrogateAI/inference.py`); everything else works from the `.npz` files
 alone and runs anywhere.
 
 ```bash
 # 1. capture the memberships. Prints the plan first with --dry-run.
-python slice_visualisation.py export --dry-run
-python slice_visualisation.py export --press-ckpt ../../checkpoints/coarse/transolver/stage1 \n    --dwell-ckpt ../../checkpoints/coarse/transolver/stage2 --release-ckpt ../../checkpoints/coarse/transolver/stage3 \n    --rollout ../../outputs/transolver_coarse/val/concatenated_rollout_all.pkl --out slices
+CK=../../checkpoints/coarse/transolver
+ROLL=../../outputs/transolver_coarse/val/concatenated_rollout_all.pkl
+python slice_visualisation.py export --press-ckpt $CK/stage1 --dwell-ckpt $CK/stage2     --release-ckpt $CK/stage3 --rollout $ROLL --out slices --dry-run   # print the plan only
+python slice_visualisation.py export --press-ckpt $CK/stage1 --dwell-ckpt $CK/stage2     --release-ckpt $CK/stage3 --rollout $ROLL --out slices
 
 # 2. score every block and head, and see which one the criterion picks
 python slice_visualisation.py select --src slices

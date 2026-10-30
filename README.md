@@ -175,6 +175,21 @@ python train.py --config ../configs/train/transolver.json --stage 2 --slice 128
 
 Optimisation settings (Adam, lr 1e-4, cosine annealing with warm restarts T0=20, Tmult=2, eta_min=1e-6, validation by rolled-out L1 every 20 epochs, best-L1 checkpoint) are identical for every architecture and stage and are stored in `configs/train/*.json`. Stages are independent, so they can be trained in parallel on different GPUs (`STAGES="1"`, `STAGES="2"`, `STAGES="3"`). Weights & Biases logging is optional (remove `--no_wandb` and set `use_wandb`).
 
+## Visualisation tools
+
+Both tools are fully argument-driven (`--help` on each).
+
+```bash
+# ParaView figures: rollout pickles -> VTU series -> rendered frames / movies
+python tools/paraview/convert_pkls_to_vtu.py --model Transolver=<rollout.pkl> --samples all --out vtu
+pvbatch tools/paraview/paraview_render.py --vtu-root vtu --out-root figures --models Transolver --skip 10
+
+# Transolver learned-slice analysis (checkpoints and rollout passed directly)
+python tools/slice_visualisation/slice_visualisation.py export --press-ckpt <dir> --dwell-ckpt <dir>     --release-ckpt <dir> --rollout <rollout.pkl> --out slices
+```
+
+Details: [tools/slice_visualisation/README.md](tools/slice_visualisation/README.md).
+
 ## Reproducing the paper
 
 [docs/reproducing_paper.md](docs/reproducing_paper.md) maps every table and figure (benchmark, staged vs monolithic, ablations, extrapolation and unseen shapes, one-step vs rolled-out, mesh transfer, timing, slice analysis) to the command that produces it.

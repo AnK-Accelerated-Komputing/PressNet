@@ -17,7 +17,7 @@ Prerequisite: dataset ([datasets/README.md](../datasets/README.md)) and either t
 | **Mesh resolution and cross-resolution transfer** | train on `fine`; for transfer, use a coarse inference config with a fine `--data` file (and vice versa) |
 | **Timing / compute table** | `rollout_info.json` from `inference.py`, then `python -m utilities.analyze_timing -i <...>/rollout_info.json -w 3` (first 3 trajectories dropped as warm-up) |
 | **Qualitative figures** | `python -m utilities.animate_compare ...` for GIFs; ParaView figures: `python tools/paraview/convert_pkls_to_vtu.py --model NAME=<pkl> --out vtu` then `pvbatch tools/paraview/paraview_render.py --vtu-root vtu --out-root figures` |
-| **Transolver slice figures** | [tools/slice_visualisation/README.md](../tools/slice_visualisation/README.md) |
+| **Transolver slice figures** | `python tools/slice_visualisation/slice_visualisation.py export --press-ckpt <dir> --dwell-ckpt <dir> --release-ckpt <dir> --rollout <pkl> --out slices`, then `select` / `render` ([details](../tools/slice_visualisation/README.md)) |
 | **Thermal benchmark** | temperature-network code: to be added |
 
 Notes on determinism: the train/validation split uses a fixed seed (42) over the group order of the HDF5 file; training itself is not seeded, so retrained checkpoints will differ slightly from the released ones. Use the released checkpoints to reproduce the reported numbers exactly.
